@@ -2,60 +2,77 @@
   <p-card header="Registro" class="w-md text-center">
     <form (ngSubmit)="onSubmit()" #f="ngForm" validate class="flex flex-col gap-4">
       <p-iftalabel>
-        <input pInputText name="username" id="username" autocomplete="off" class="w-full" [(ngModel)]="model.username" required minlength="3" />
+        <input pInputText name="username" id="username" autocomplete="off" class="w-full" #username="ngModel" [(ngModel)]="model.username" [invalid]="username.invalid && (username.touched || f.submitted)" required minlength="3" />
         <label for="username">Usuario</label>
       </p-iftalabel>
-      <div class="error" *ngIf="f.controls.username?.invalid && (f.controls.username?.touched || f.submitted)">
-        <small *ngIf="f.controls.username?.errors?.required">El usuario es obligatorio.</small>
-        <small *ngIf="f.controls.username?.errors?.minlength">Mínimo 3 caracteres.</small>
-      </div>
+      @if (username.invalid && (username.touched || f.submitted)) {
+        <p-message severity="error" size="small" variant="simple">Usuario requerido min. 3 caracteres.</p-message>
+      }
 
       <p-iftalabel>
-        <input pInputText type="email" name="email" id="email" class="w-full" [(ngModel)]="model.email" required email />
+        <input pInputText type="email" name="email" id="email" class="w-full" #email="ngModel" [(ngModel)]="model.email" [invalid]="email.invalid && (email.touched || f.submitted)" required email />
         <label for="email">Email</label>
       </p-iftalabel>
-      <div class="error" *ngIf="f.controls.email?.invalid && (f.controls.email?.touched || f.submitted)">
-        <small *ngIf="f.controls.email?.errors?.required">El email es obligatorio.</small>
-        <small *ngIf="f.controls.email?.errors?.email">Formato de email inválido.</small>
-      </div>
+      @if (email.invalid && (email.touched || f.submitted)) {
+        <p-message severity="error" size="small" variant="simple">El email es obligatorio o tiene formato inválido.</p-message>
+      }
 
       <p-iftalabel>
-        <input pInputText type="password" name="password" id="password" class="w-full" [(ngModel)]="model.password" required minlength="6" />
+        <input pInputText type="password" name="password" id="password" class="w-full" #password="ngModel" [(ngModel)]="model.password" [invalid]="password.invalid && (password.touched || f.submitted)" required minlength="10" />
         <label for="password">Contraseña</label>
       </p-iftalabel>
-      <div class="error" *ngIf="f.controls.password?.invalid && (f.controls.password?.touched || f.submitted)">
-        <small *ngIf="f.controls.password?.errors?.required">La contraseña es obligatoria.</small>
-        <small *ngIf="f.controls.password?.errors?.minlength">Mínimo 6 caracteres.</small>
-      </div>
+      @if (password.invalid && (password.touched || f.submitted)) {
+        <p-message severity="error" size="small" variant="simple">La contraseña es obligatoria y debe tener al menos 10 caracteres.</p-message>
+      }
+      @if (f.submitted && !passwordValid()) {
+        <p-message severity="error" size="small" variant="simple">La contraseña debe incluir al menos un símbolo especial: !@#$%^&*()_+</p-message>
+      }
 
       <p-iftalabel>
-        <input pInputText type="password" name="confirmPassword" id="confirmPassword" class="w-full" [(ngModel)]="model.confirmPassword" required />
+        <input pInputText type="password" name="confirmPassword" id="confirmPassword" class="w-full" #confirmPassword="ngModel" [(ngModel)]="model.confirmPassword" [invalid]="confirmPassword.invalid && (confirmPassword.touched || f.submitted)" required />
         <label for="confirmPassword">Confirmar contraseña</label>
       </p-iftalabel>
-      <div class="error" *ngIf="(f.controls.confirmPassword?.touched || f.submitted) && !passwordsMatch()">
-        <small>Las contraseñas no coinciden.</small>
-      </div>
+      @if ((confirmPassword.touched || f.submitted) && !passwordsMatch()) {
+        <p-message severity="error" size="small" variant="simple">Las contraseñas no coinciden.</p-message>
+      }
 
       <p-iftalabel>
-        <input pInputText name="fullName" id="fullName" class="w-full" [(ngModel)]="model.fullName" required />
+        <input pInputText name="fullName" id="fullName" class="w-full" #fullName="ngModel" [(ngModel)]="model.fullName" [invalid]="fullName.invalid && (fullName.touched || f.submitted)" required />
         <label for="fullName">Nombre completo</label>
       </p-iftalabel>
-      <div class="error" *ngIf="f.controls.fullName?.invalid && (f.controls.fullName?.touched || f.submitted)">
-        <small>El nombre completo es obligatorio.</small>
-      </div>
+      @if (fullName.invalid && (fullName.touched || f.submitted)) {
+        <p-message severity="error" size="small" variant="simple">El nombre completo es obligatorio.</p-message>
+      }
 
       <p-iftalabel>
-        <input pInputText name="address" id="address" class="w-full" [(ngModel)]="model.address" required />
+        <input pInputText name="address" id="address" class="w-full" #address="ngModel" [(ngModel)]="model.address" [invalid]="address.invalid && (address.touched || f.submitted)" required />
         <label for="address">Dirección</label>
       </p-iftalabel>
-      <div class="error" *ngIf="f.controls.address?.invalid && (f.controls.address?.touched || f.submitted)">
-        <small>La dirección es obligatoria.</small>
-      </div>
+      @if (address.invalid && (address.touched || f.submitted)) {
+        <p-message severity="error" size="small" variant="simple">La dirección es obligatoria.</p-message>
+      }
+
+      <p-iftalabel>
+        <input pInputText type="date" name="birthday" id="birthday" class="w-full" #birthday="ngModel" [(ngModel)]="model.birthday" [invalid]="birthday.invalid && (birthday.touched || f.submitted)" required />
+        <label for="birthday">Fecha de nacimiento</label>
+      </p-iftalabel>
+      @if ((birthday.touched || f.submitted) && !isAdult()) {
+        <p-message severity="error" size="small" variant="simple">Debes ser mayor de edad (18+).</p-message>
+      }
+
+      <p-iftalabel>
+        <input pInputText type="tel" name="phone" id="phone" class="w-full" #phone="ngModel" [(ngModel)]="model.phone" [invalid]="phone.invalid && (phone.touched || f.submitted)" required pattern="[0-9]+" minlength="7" />
+        <label for="phone">Teléfono</label>
+      </p-iftalabel>
+      @if (phone.invalid && (phone.touched || f.submitted)) {
+        <p-message severity="error" size="small" variant="simple">Teléfono inválido. Solo números, mínimo 7 dígitos.</p-message>
+      }
 
       <div class="mt-4">
-        <p-button [disabled]="f.invalid || !passwordsMatch()" type="submit" class="font-bold">Registrarse</p-button>
+        <p-button [disabled]="f.invalid || !passwordsMatch() || !passwordValid() || !isAdult() || !phoneValid()" type="submit" class="font-bold">Registrarse</p-button>
       </div>
     </form>
   </p-card>
 </div>
+
 
