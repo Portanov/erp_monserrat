@@ -1,0 +1,62 @@
+/* Banner styles for landingpage */
+.banner {
+  position: relative;
+  width: 100%;
+  height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.banner-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
+.banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.25));
+  z-index: 2;
+}
+
+.banner-content {
+  position: relative;
+  z-index: 3;
+  color: #fff;
+  text-align: center;
+  padding: 1rem 2rem;
+}
+
+.banner-content h1 {
+  font-size: 3rem;
+  margin: 0 0 0.5rem 0;
+  letter-spacing: 1px;
+}
+
+.banner-content p {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+@media (max-width: 768px) {
+  .banner { height: 40vh; }
+  .banner-content h1 { font-size: 1.6rem; }
+  .banner-content p { font-size: 0.95rem; }
+}
+
+/* Keep existing contenido spacing */
+.contenido {
+  padding: 1.25rem;
+}
+.contenido{
+  margin: 4%;
+}

@@ -1,1 +1,8 @@
-/* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/css2?family=Alumni+Sans+Pinstripe&display=swap');
+@import "tailwindcss";
+
+* {
+  font-family: 'Alumni Sans Pinstripe', sans-serif;
+  font-size: 1.15rem;
+}
+
