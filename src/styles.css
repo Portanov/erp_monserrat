@@ -1,8 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Alumni+Sans+Pinstripe&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Modak&display=swap');
+@import "primeicons/primeicons.css";
 @import "tailwindcss";
+@import "tailwindcss-primeui";
 
 * {
-  font-family: 'Alumni Sans Pinstripe', sans-serif;
-  font-size: 1.15rem;
+  font-family: "Quicksand", sans-serif;
+  font-optical-sizing: auto;
+}
+
+.modak-regular {
+  font-family: "Modak", system-ui;
+  font-weight: 400;
+  font-style: normal;
 }
 

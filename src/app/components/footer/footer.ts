@@ -1,8 +1,9 @@
 import { Component } from '@angular/core';
+import { CardModule } from 'primeng/card';
 
 @Component({
   selector: 'app-footer',
-  imports: [],
+  imports: [CardModule],
   templateUrl: './footer.html',
   styleUrl: './footer.css',
 })

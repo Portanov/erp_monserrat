@@ -1,13 +1,14 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { InputTextModule } from 'primeng/inputtext';
 import { CardModule } from 'primeng/card';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { IftaLabelModule } from 'primeng/iftalabel';
 import { ButtonModule } from 'primeng/button';
-import { MessageService } from 'primeng/api';
+import { AlertService } from '../../../services/alert.service';
 import { MessageModule } from 'primeng/message';
-
+import { RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 @Component({
   selector: 'app-login',
   imports: [
@@ -17,12 +18,16 @@ import { MessageModule } from 'primeng/message';
     FloatLabelModule,
     IftaLabelModule,
     ButtonModule,
-    MessageModule
+    MessageModule,
+    RouterLink
   ],
   templateUrl: './login.html',
   styleUrl: './login.css',
 })
 export class Login {
+  private alertService = inject(AlertService);
+  private router = inject(Router);
+
   model = {
     username: '',
     email: '',
@@ -30,13 +35,20 @@ export class Login {
   };
 
   passwordsMatch(): boolean {
-    return !!this.model.password;
+    return this.model.password === "pattern123@";
+  }
+
+  emailMatch(): boolean {
+    return this.model.email === "pollo@gmail.com";
   }
 
   onSubmit() {
-    if (!this.passwordsMatch()) return;
-    console.log('Sesion iniciada', this.model);
-    alert('Sesion iniciada correctamente.');
-    this.model = { username: '', email: '', password: '' };
+    if (!this.passwordsMatch() || !this.emailMatch()) {
+      this.alertService.error('Error', 'Contraseña o correo incorrectos.');
+      return;
+    };
+    localStorage.setItem('session', 'true');
+    this.alertService.success('Éxito', 'Inicio de sesión exitoso.');
+    this.router.navigate(['/group']);
   }
 }

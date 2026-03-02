@@ -61,11 +61,11 @@
       }
 
       <p-iftalabel>
-        <input pInputText type="tel" name="phone" id="phone" class="w-full" #phone="ngModel" [(ngModel)]="model.phone" [invalid]="phone.invalid && (phone.touched || f.submitted)" required pattern="[0-9]+" minlength="7" />
+        <input pInputText type="tel" name="phone" id="phone" class="w-full" #phone="ngModel" [(ngModel)]="model.phone" [invalid]="phone.invalid && (phone.touched || f.submitted)" required pattern="[0-9]+" minlength="10" maxlength="10" />
         <label for="phone">Teléfono</label>
       </p-iftalabel>
       @if (phone.invalid && (phone.touched || f.submitted)) {
-        <p-message severity="error" size="small" variant="simple">Teléfono inválido. Solo números, mínimo 7 dígitos.</p-message>
+        <p-message severity="error" size="small" variant="simple">Teléfono inválido. Solo números y 10 dígitos.</p-message>
       }
 
       <div class="mt-4">

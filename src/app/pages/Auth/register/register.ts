@@ -57,7 +57,7 @@ export class Register {
   phoneValid(): boolean {
     if (!this.model.phone) return false;
     const onlyDigits = /^[0-9]+$/;
-    return onlyDigits.test(this.model.phone) && this.model.phone.length >= 7 && this.model.phone.length <= 15;
+    return onlyDigits.test(this.model.phone) && this.model.phone.length === 10;
   }
 
   onSubmit() {
@@ -74,7 +74,7 @@ export class Register {
       return;
     }
     if (!this.phoneValid()) {
-      alert('Teléfono inválido. Solo números, entre 7 y 15 dígitos.');
+      alert('Teléfono inválido. Solo número y 10 dígitos.');
       return;
     }
 

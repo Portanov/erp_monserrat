@@ -1,12 +1,15 @@
-<div class="mb-4 p-8 justify-center items-center flex">
-  <p-card header="Iniciar Sesion" class="w-md text-center">
+<div class="p-8 justify-around items-center flex h-screen">
+  <p-card class="w-md text-center">
+    <ng-template #header>
+      <h1 class="mt-4 text-4xl modak-regular">Iniciar Sesión</h1>
+    </ng-template>
     <form (ngSubmit)="onSubmit()" #f="ngForm" validate class="flex flex-col gap-4">
       <p-iftalabel>
         <input pInputText name="username" id="username" autocomplete="off" class="w-full" #username="ngModel" [(ngModel)]="model.username" [invalid]="username.invalid && (username.touched || f.submitted)" required minlength="3" />
         <label for="username">Usuario</label>
       </p-iftalabel>
       @if (username.invalid && (username.touched || f.submitted)) {
-        <p-message severity="error" size="small" variant="simple">Usuario requerido — mínimo 3 caracteres.</p-message>
+        <p-message severity="error" size="small" variant="simple">Usuario requerido</p-message>
       }
 
       <p-iftalabel>
@@ -18,17 +21,18 @@
       }
 
       <p-iftalabel>
-        <input pInputText type="password" name="password" id="password" class="w-full" #password="ngModel" [(ngModel)]="model.password" [invalid]="password.invalid && (password.touched || f.submitted)" required minlength="6" />
+        <input pInputText type="password" name="password" id="password" class="w-full" #password="ngModel" [(ngModel)]="model.password" [invalid]="password.invalid && (password.touched || f.submitted)" required />
         <label for="password">Contraseña</label>
       </p-iftalabel>
       @if (password.invalid && (password.touched || f.submitted)) {
         <p-message severity="error" size="small" variant="simple">La contraseña es obligatoria.</p-message>
       }
 
-      <div class="mt-4">
-        <p-button [disabled]="f.invalid" type="submit" class="font-bold">Acceder</p-button>
+      <div class="mt-1">
+        <p-button type="submit" class="font-bold">Acceder</p-button>
       </div>
     </form>
+    <p class="mt-2 text-xs" > ¿No tienes una cuenta? <a [routerLink]="'/register'" class="text-primary" >Registrate</a></p>
   </p-card>
 </div>
 

@@ -1,0 +1,29 @@
+<div class="flex items-center justify-center min-h-screen">
+  <p-card [style]="{width: '600px', 'border-radius': '24px'}" class="mt-16" >
+    <div class="flex justify-center -mt-16 mb-4">
+      <p-image src="images/gato_soldado.jpg" [preview]="true" imageClass="border-4" />
+    </div>
+    <div class="text-center mb-6">
+      <h1 class="text-3xl font-bold text-gray-500 mb-1">@Pollo</h1>
+      <p class="text-gray-500 flex items-center justify-center gap-2">
+        <i class="pi pi-envelope"></i>
+        pollo@gmail.com
+      </p>
+    </div>
+    <div class="flex gap-3 justify-center">
+      <p-button
+        label="Editar perfil"
+        icon="pi pi-user-edit"
+        styleClass="flex-1 p-button-outlined"
+        severity="secondary">
+      </p-button>
+      <p-button
+        label="Cerrar Sesion"
+        icon="pi pi-sign-out"
+        styleClass="flex-1"
+        severity="primary">
+      </p-button>
+    </div>
+  </p-card>
+</div>
+
