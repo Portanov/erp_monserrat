@@ -15,9 +15,11 @@ export const appConfig: ApplicationConfig = {
     providePrimeNG ({
       ripple: true,
       theme: {
-        preset: Aura, options: {
+        preset: Aura,
+        options: {
             cssLayer: {
-                name: 'primeng', order: 'theme, base, primeng'
+                name: 'primeng',
+                order: 'theme, base, primeng'
             }
         }
       }

@@ -1,29 +1,130 @@
-<div class="flex items-center justify-center min-h-screen">
-  <p-card [style]="{width: '600px', 'border-radius': '24px'}" class="mt-16" >
-    <div class="flex justify-center -mt-16 mb-4">
-      <p-image src="images/gato_soldado.jpg" [preview]="true" imageClass="border-4" />
+<div class="mt-16 m-4 h-screen">
+  <p-dialog header="Crear Usuario" [modal]="true" [(visible)]="createdVisible" [style]="{ width: '50rem'}">
+    <div class="flex flex-col gap-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label>Username</label>
+          <input pInputText [(ngModel)]="newUser.username" class="w-full" required />
+        </div>
+        <div>
+          <label>Email</label>
+          <input pInputText type="email" [(ngModel)]="newUser.email" class="w-full" required />
+        </div>
+        <div>
+          <label>Full Name</label>
+          <input pInputText [(ngModel)]="newUser.fullName" class="w-full" required />
+        </div>
+        <div>
+          <label>Password</label>
+          <p-password [(ngModel)]="newUser.password" class="w-full" required />
+        </div>
+        <div>
+          <label>Role</label>
+          <p-select [options]="roles" [(ngModel)]="newUser.role" optionLabel="label" optionValue="value" class="w-full" />
+        </div>
+        <div>
+          <label>Phone</label>
+          <p-inputMask mask="(999) 999-9999" [(ngModel)]="newUser.phone" class="w-full ms-2" />
+        </div>
+        <div>
+          <label>Address</label>
+          <input pInputText [(ngModel)]="newUser.address" class="w-full" />
+        </div>
+        <div class="col-span-2">
+          <label>Birth Date</label>
+          <p-datepicker [(ngModel)]="newUser.birthDate" dateFormat="dd/mm/yy" placeholder="dd/mm/yyyy" pInputMask="99/99/9999" showIcon iconDisplay="input" />
+        </div>
+      </div>
     </div>
-    <div class="text-center mb-6">
-      <h1 class="text-3xl font-bold text-gray-500 mb-1">@Pollo</h1>
-      <p class="text-gray-500 flex items-center justify-center gap-2">
-        <i class="pi pi-envelope"></i>
-        pollo@gmail.com
-      </p>
+    <ng-template pTemplate="footer">
+      <p-button label="Cancelar" icon="pi pi-times" (onClick)="closeCreateDialog()" severity="secondary"></p-button>
+      <p-button label="Guardar" icon="pi pi-check" (onClick)="saveUser()" severity="primary"></p-button>
+    </ng-template>
+  </p-dialog>
+  <div class="grid grid-cols-5 gap-0">
+    <div class="col-span-4 p-4">
+      <p-table [value]="users" dataKey="username" editMode="row">
+        <ng-template #header>
+          <tr>
+            <th style="width:20%">Username</th>
+            <th style="width:20%">Email</th>
+            <th style="width:20%">Full Name</th>
+            <th style="width:15%">Role</th>
+            <th style="width:15%">Status</th>
+            <th style="width:10%"></th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-user let-editing="editing" let-ri="rowIndex">
+          <tr [pEditableRow]="user">
+            <td>
+              <p-cellEditor>
+                <ng-template #input>
+                  <input pInputText type="text" [(ngModel)]="user.username" readonly />
+                </ng-template>
+                <ng-template #output>
+                  {{ user.username }}
+                </ng-template>
+              </p-cellEditor>
+            </td>
+            <td>
+              <p-cellEditor>
+                <ng-template #input>
+                  <input pInputText type="email" [(ngModel)]="user.email" />
+                </ng-template>
+                <ng-template #output>
+                  {{ user.email }}
+                </ng-template>
+              </p-cellEditor>
+            </td>
+            <td>
+              <p-cellEditor>
+                <ng-template #input>
+                  <input pInputText type="text" [(ngModel)]="user.fullName" />
+                </ng-template>
+                <ng-template #output>
+                  {{ user.fullName }}
+                </ng-template>
+              </p-cellEditor>
+            </td>
+            <td>
+              <p-cellEditor>
+                <ng-template #input>
+                  <p-select [options]="roles" appendTo="body" [(ngModel)]="user.role" [style]="{ width: '100%' }" />
+                </ng-template>
+                <ng-template #output>
+                  {{ user.role }}
+                </ng-template>
+              </p-cellEditor>
+            </td>
+            <td>
+              <p-cellEditor>
+                <ng-template #input>
+                  <p-select [options]="statuses" appendTo="body" [(ngModel)]="user.status"
+                    [style]="{ width: '100%' }" />
+                </ng-template>
+                <ng-template #output>
+                  <p-tag [value]="user.status" [severity]="getSeverity(user.status)" />
+                </ng-template>
+              </p-cellEditor>
+            </td>
+            <td>
+              <div class="flex items-center justify-center gap-2">
+                <button *ngIf="!editing" pButton pRipple type="button" pInitEditableRow icon="pi pi-pencil"
+                  (click)="onRowEditInit(user)" text rounded severity="secondary"></button>
+                <button *ngIf="editing" pButton pRipple type="button" pSaveEditableRow icon="pi pi-check"
+                  (click)="onRowEditSave(user)" text rounded severity="secondary"></button>
+                <button *ngIf="editing" pButton pRipple type="button" pCancelEditableRow icon="pi pi-times"
+                  (click)="onRowEditCancel(user, ri)" text rounded severity="secondary"></button>
+                <button pButton pRipple type="button" icon="pi pi-trash" (click)="deleteUser(user.username)" text
+                  rounded severity="danger"></button>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
     </div>
-    <div class="flex gap-3 justify-center">
-      <p-button
-        label="Editar perfil"
-        icon="pi pi-user-edit"
-        styleClass="flex-1 p-button-outlined"
-        severity="secondary">
-      </p-button>
-      <p-button
-        label="Cerrar Sesion"
-        icon="pi pi-sign-out"
-        styleClass="flex-1"
-        severity="primary">
-      </p-button>
+    <div class="p-4 bg-gray-900 rounded-lg h-screen">
+      <p-panelMenu [model]="items"></p-panelMenu>
     </div>
-  </p-card>
+  </div>
 </div>
-

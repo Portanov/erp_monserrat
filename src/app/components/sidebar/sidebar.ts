@@ -1,16 +1,29 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, ViewChild, OnInit } from '@angular/core';
 import { AvatarModule } from 'primeng/avatar';
 import { ButtonModule } from 'primeng/button';
 import { Drawer, DrawerModule } from 'primeng/drawer';
 import { RippleModule } from 'primeng/ripple';
-import { RouterLink } from '@angular/router';
+import { UserService } from '../../services/user/user.service';
+import { PermissionService } from '../../services/permissions/permissions.service';
+import { PanelMenuModule } from 'primeng/panelmenu';
 
 @Component({
   selector: 'app-sidebar',
-  imports: [AvatarModule, ButtonModule, DrawerModule, RippleModule, RouterLink],
+  imports: [
+    AvatarModule,
+    ButtonModule,
+    DrawerModule,
+    RippleModule,
+    PanelMenuModule
+  ],
   template: `
     <div class="card flex justify-center">
-      <p-drawer #drawerRef [(visible)]="visible" styleClass="w-80">
+      <p-drawer #drawerRef [(visible)]="visible" styleClass="w-80"
+      appendTo="body"
+      [modal]="true"
+      position="right"
+      (onShow)="onDrawerShow()"
+      >
         <ng-template #headless>
           <div class="flex flex-col h-full">
             <div class="flex items-center justify-between px-6 pt-4 shrink-0">
@@ -30,18 +43,8 @@ import { RouterLink } from '@angular/router';
               </span>
             </div>
             <div class="overflow-y-auto">
-              <ul class="list-none p-4 m-0">
-                @for ( opciones of opciones ; track opciones.label) {
-                  <li>
-                    <a
-                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
-                      [routerLink]="opciones.routerLink"
-                    >
-                      <i class="{{opciones.icon}} mr-2"></i>
-                      <span class="font-medium">{{opciones.label}}</span>
-                    </a>
-                  </li>
-                }
+              <ul class="list-none p-6 m-0">
+                <p-panelmenu [model]="opciones" />
               </ul>
             </div>
             <div class="mt-auto">
@@ -51,24 +54,85 @@ import { RouterLink } from '@angular/router';
           </div>
         </ng-template>
       </p-drawer>
-      <p-button (click)="visible = true" icon="pi pi-bars" variant="text" severity="secondary" />
+      <p-button (click)="toggleDrawer()" icon="pi pi-bars" variant="text" severity="secondary" />
     </div>
   `,
   standalone: true,
 })
-export class Sidebar {
-  @ViewChild('drawerRef') drawerRef!: Drawer;
 
+export class Sidebar implements OnInit {
+  @ViewChild('drawerRef') drawerRef!: Drawer;
   visible: boolean = false;
+  opciones: any[] = [];
+
+  constructor(
+    private userService: UserService,
+    private permissionService: PermissionService
+  ) { }
+
+  ngOnInit(): void {
+    this.actualizarMenu();
+  }
+
+  toggleDrawer(): void {
+    this.visible = true;
+    this.actualizarMenu();
+  }
+
+  onDrawerShow(): void {
+    this.actualizarMenu();
+  }
+
+  actualizarMenu(): void {
+    const auth = this.userService.isAuthenticated();
+
+    const rutasUniversales = [
+      { label: 'Landing', routerLink: '/', icon: 'pi pi-home', visible: true },
+    ];
+
+    const rutasProtegidas = [
+      { label: 'Group', routerLink: '/group', icon: 'pi pi-chart-bar', page: 'group' },
+      { label: 'User', routerLink: '/user', icon: 'pi pi-users', page: 'users' },
+    ];
+
+    const rutaPerfil = [
+      { label: 'Profile', routerLink: '/profile', icon: 'pi pi-user', visible: auth },
+    ];
+
+    const rutaLogin = [
+      { label: 'Login', routerLink: '/login', icon: 'pi pi-sign-in', visible: !auth },
+    ];
+
+    const rutaCierreSesion = [
+      { label: 'Cerrar sesión', icon: 'pi pi-sign-out', command: () => this.logout(), visible: auth },
+    ];
+
+    const rutasProtegidasFiltradas = rutasProtegidas
+      .filter(ruta => this.permissionService.hasPermission(ruta.page, 'view'))
+      .map(({ page, ...rest }) => ({ ...rest, visible: true }));
+
+    this.opciones = [
+      ...rutasUniversales,
+      ...rutasProtegidasFiltradas,
+      ...rutaPerfil,
+      ...rutaLogin,
+      ...rutaCierreSesion,
+    ].filter(opcion => opcion.visible);
+  }
 
   closeCallback(e: any): void {
     this.drawerRef.close(e);
   }
 
-  opciones = [
-    { label: 'Landing', routerLink: '/', icon: 'pi pi-home' },
-    { label: 'Home', routerLink: '/group', icon: 'pi pi-chart-bar' },
-    { label: 'Profile', routerLink: '/user', icon: 'pi pi-users' },
-    { label: 'Login', routerLink: '/login', icon: 'pi pi-sign-in' },
-  ];
+  onOptionClick(option: any): void {
+    if (option && option.command && typeof option.command === 'function') {
+      option.command();
+    }
+  }
+
+  logout(): void {
+    this.userService.logout();
+    this.actualizarMenu();
+    this.closeCallback(new Event('click'));
+  }
 }

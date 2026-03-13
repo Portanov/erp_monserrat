@@ -8,8 +8,9 @@ export const routes: Routes = [
     component: PublicLayout,
     children: [
       { path: '', loadComponent: () => import('./pages/landingpage/landingpage').then(m => m.Landingpage) },
-      { path: 'group', loadComponent: () => import('./pages/group/group').then(m => m.Group)},
-      { path: 'user', loadComponent: () => import('./pages/user/user').then(m => m.User) },
+      { path: 'group', loadComponent: () => import('./pages/group/group').then(m => m.Group) },
+      { path: 'user', loadComponent: () => import('./pages/user/user').then(m => m.User)},
+      { path: 'profile', loadComponent: () => import('./pages/profile/profile').then(m => m.Profile) },
     ]
   },
   {

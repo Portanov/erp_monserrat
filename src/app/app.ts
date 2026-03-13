@@ -1,5 +1,4 @@
 import { Component, signal } from '@angular/core';
-import { MessageService } from 'primeng/api';
 import { RouterOutlet } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { Alerts } from './components/alerts/alerts';
