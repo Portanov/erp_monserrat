@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { inject } from '@angular/core';
 import { CanActivateFn, Router, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import { PermissionService } from '../services/permissions/permissions.service';
 import { UserService } from '../services/user/user.service';
@@ -20,13 +20,24 @@ export const permissionGuard: CanActivateFn = (
 
   const requiredPermissions = route.data['permissions'] as string[];
 
-  if (requiredPermissions && requiredPermissions.length > 0) {
-    const [page, action] = requiredPermissions[0].split('.');
+  if (!requiredPermissions || requiredPermissions.length === 0) {
+    return true;
+  }
 
-    if (!permissionService.hasPermission(page, action)) {
-      router.navigate(['/']);
+  const hasAllPermissions = requiredPermissions.every(permission => {
+    const [page, action] = permission.split('.');
+
+    if (!page || !action) {
+      console.warn(`Formato de permiso inválido: ${permission}`);
       return false;
     }
+
+    return permissionService.hasPermission(page, action);
+  });
+
+  if (!hasAllPermissions) {
+    router.navigate(['/unauthorized']);
+    return false;
   }
 
   return true;

@@ -1,0 +1,87 @@
+<p-dialog [(visible)]="visible" [style]="{ width: '50rem' }"
+  [header]="ticketId ? 'Editar Ticket' : 'Crear Nuevo Ticket'" [modal]="true" styleClass="p-fluid" (onHide)="onHide()">
+
+  <ng-template #content>
+    @if (loading) {
+    <div class="flex justify-content-center p-4">
+      <p-progressSpinner></p-progressSpinner>
+    </div>
+    } @else {
+    <div class="grid grid-cols-2 gap-4">
+      <div class="field">
+        <label for="title">Título *</label>
+        <input id="title" type="text" pInputText [(ngModel)]="formData.title"
+          [class.ng-invalid]="submitted && !formData.title" class="w-full" />
+        @if (submitted && !formData.title) {
+        <small class="p-error">El título es requerido</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="priority">Prioridad *</label>
+        <p-select id="priority" [(ngModel)]="formData.priority" [options]="priorityOptions" optionLabel="label"
+          optionValue="value" placeholder="Seleccionar prioridad" [class.ng-invalid]="submitted && !formData.priority"
+          class="w-full">
+          <ng-template let-option #item>
+            <p-tag [value]="option.label"></p-tag>
+          </ng-template>
+        </p-select>
+        @if (submitted && !formData.priority) {
+        <small class="p-error">La prioridad es requerida</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="assignedTo">Asignar a</label>
+        <p-select id="assignedTo" [(ngModel)]="formData.assignedToId" [options]="users" optionLabel="fullName"
+          optionValue="id" placeholder="Seleccionar usuario" fluid appendTo="'body'">
+          <ng-template let-option #item>
+            <div class="flex align-items-center gap-2">
+              <p-avatar [label]="option.fullName?.charAt(0) || '?'" shape="circle" size="normal"></p-avatar>
+              <span>{{option.fullName}}</span>
+            </div>
+          </ng-template>
+        </p-select>
+      </div>
+
+      <div class="field">
+        <label for="dueDate">Fecha Límite</label>
+        <p-datepicker id="dueDate" [(ngModel)]="formData.dueDate" dateFormat="dd/mm/yy" [showIcon]="true"
+          inputId="icondisplay" placeholder="dd/mm/aaaa" fluid [appendTo]="'body'" >
+        </p-datepicker>
+      </div>
+    </div>
+
+
+    <div class="field">
+      <label for="description">Descripción</label>
+      <textarea id="description" pInputTextarea [(ngModel)]="formData.description" rows="4" class="w-full"></textarea>
+    </div>
+
+    <div class="grid">
+      <div class="col-6">
+
+      </div>
+
+      <div class="col-6">
+
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="col-6">
+
+      </div>
+
+      <div class="col-6">
+
+      </div>
+    </div>
+    }
+  </ng-template>
+
+  <ng-template #footer>
+    <p-button label="Cancelar" icon="pi pi-times" [outlined]="true" (click)="close()" />
+    <p-button [label]="ticketId ? 'Actualizar' : 'Crear'" icon="pi pi-check" (click)="save()" [loading]="saving" />
+  </ng-template>
+</p-dialog>

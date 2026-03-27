@@ -1,0 +1,167 @@
+<div class="card mt-2">
+  <p-table #dt1 [value]="tickets" dataKey="id" [rows]="10" [rowsPerPageOptions]="[10,25,50]" [loading]="loading"
+    [paginator]="true" [globalFilterFields]="['id', 'title']" showGridlines>
+
+    <ng-template #caption>
+      <div class="flex">
+        <p-button label="Limpiar" [outlined]="true" icon="pi pi-filter-slash" (click)="clear(dt1)" />
+        <p-iconfield iconPosition="left" class="ml-auto">
+          <p-inputicon>
+            <i class="pi pi-search"></i>
+          </p-inputicon>
+          <input pInputText type="text" (input)="dt1.filterGlobal($event.target.value, 'contains')"
+            placeholder="Buscar por ID o título" />
+        </p-iconfield>
+      </div>
+    </ng-template>
+
+    <ng-template #header>
+      <tr>
+        <th style="min-width:10rem">
+          <div class="flex items-center justify-between">
+            ID
+          </div>
+        </th>
+        <th style="min-width:15rem">
+          <div class="flex items-center justify-between">
+            Título
+          </div>
+        </th>
+        <th style="min-width:10rem">
+          <div class="flex items-center justify-between">
+            Estado
+            <p-columnFilter field="status" matchMode="equals" display="menu" [showMatchModes]="false" [showOperator]="false" [showAddButton]="false">
+              <ng-template #filter let-filterValue let-filter="filterCallback">
+                <p-select [ngModel]="filterValue" (ngModelChange)="filter($event)" [options]="statusOptions"
+                  placeholder="Seleccionar estado" class="w-full" optionLabel="label" optionValue="value">
+                  <ng-template let-option #item>
+                    <p-tag [value]="option.label"></p-tag>
+                  </ng-template>
+                </p-select>
+              </ng-template>
+            </p-columnFilter>
+          </div>
+        </th>
+        <th style="min-width:10rem">
+          <div class="flex items-center justify-between">
+            Prioridad
+            <p-columnFilter field="priority" matchMode="equals" display="menu" [showMatchModes]="false" [showOperator]="false" [showAddButton]="false">
+              <ng-template #filter let-filterValue let-filter="filterCallback">
+                <p-select [ngModel]="filterValue" (ngModelChange)="filter($event)" [options]="priorityOptions"
+                  placeholder="Seleccionar prioridad" class="w-full" optionLabel="label" optionValue="value">
+                  <ng-template let-option #item>
+                    <p-tag [value]="option.label"></p-tag>
+                  </ng-template>
+                </p-select>
+              </ng-template>
+            </p-columnFilter>
+          </div>
+        </th>
+        <th style="min-width:12rem">
+          <div class="flex items-center justify-between">
+            Asignado a
+          </div>
+        </th>
+        <th style="min-width:10rem">
+          <div class="flex items-center justify-between">
+            Fecha Límite
+          </div>
+        </th>
+        <th>Acciones</th>
+      </tr>
+    </ng-template>
+
+    <ng-template #body let-ticket>
+      <tr>
+        <td>
+          <span class="font-bold">{{ticket.id}}</span>
+        </td>
+        <td>
+          <span class="font-medium">{{ticket.title}}</span>
+        </td>
+        <td>
+          @if (ticket.assignedToId === usuario?.id) {
+          <div [pEditableColumn]="ticket.status" (onEditComplete)="onStatusEditComplete($event, ticket)">
+            <p-cellEditor>
+              <ng-template #input>
+                <p-select [(ngModel)]="ticket.status" [options]="statusOptions" optionLabel="label" optionValue="value"
+                  appendTo="body" [style]="{ width: '100%' }" (onChange)="updateTicketStatus(ticket)">
+                </p-select>
+              </ng-template>
+              <ng-template #output>
+                <p-tag [value]="ticketsService.getStatusLabel(ticket.status)" [rounded]="true" class="cursor-pointer">
+                </p-tag>
+              </ng-template>
+            </p-cellEditor>
+          </div>
+          } @else {
+          <p-tag [value]="ticketsService.getStatusLabel(ticket.status)" [rounded]="true">
+          </p-tag>
+          }
+        </td>
+        <td>
+          <p-tag [value]="ticketsService.getPriorityLabel(ticket.priority)" [rounded]="true">
+          </p-tag>
+        </td>
+        <td>
+          <div class="flex items-center gap-2">
+            @if (ticket.assignedToId) {
+            @let assignedUser = getUserById(ticket.assignedToId);
+            @if (assignedUser) {
+            <p-avatar [label]="assignedUser.fullName.charAt(0) || '?'" shape="circle" size="normal">
+            </p-avatar>
+            <span>{{assignedUser.fullName}}</span>
+            } @else {
+            <span class="text-color-secondary">Usuario no encontrado</span>
+            }
+            } @else {
+            <span class="text-color-secondary italic">Sin asignar</span>
+            }
+          </div>
+        </td>
+        <td>
+          @if (ticket.dueDate) {
+          <span [class.text-red-500]="isOverdue(ticket)" [class.font-bold]="isOverdue(ticket)">
+            {{ticket.dueDate | date:'dd/MM/yyyy'}}
+            @if (isOverdue(ticket)) {
+            <i class="pi pi-exclamation-circle ml-1" pTooltip="Vencido" tooltipPosition="top"></i>
+            }
+          </span>
+          } @else {
+          <span class="text-color-secondary italic">Sin fecha</span>
+          }
+        </td>
+        <td>
+          @if (ticket.createdById === usuario?.id ) {
+            <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" (click)="openEditTicket(ticket)"/>
+            <p-button icon="pi pi-comment" [rounded]="true" [text]="true" severity="info" (onClick)="openCommentDialog(ticket)"/>
+            <p-button icon="pi pi-history" [rounded]="true" [text]="true" severity="secondary" />
+          } @else if (ticket.assignedToId === usuario?.id) {
+            <p-button icon="pi pi-comment" [rounded]="true" [text]="true" severity="info" (onClick)="openCommentDialog(ticket)" />
+            <p-button icon="pi pi-history" [rounded]="true" [text]="true" severity="secondary" />
+          }
+        </td>
+      </tr>
+    </ng-template>
+
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="7" class="text-center p-4">
+          <div class="grid grid-rows-3 gap-0">
+            <i class="pi pi-inbox text-4xl text-color-secondary mb-2"></i>
+            <span class="text-lg font-medium text-color-secondary mb-0">No hay tickets disponibles</span>
+            <span class="text-sm text-color-secondary">Crea un nuevo ticket para comenzar</span>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<app-ticket-dialog [(visible)]="showTicketDialog" [ticketId]="selectedTicketId" [groupId]="groupId"
+  (saved)="onTicketSaved($event)">
+</app-ticket-dialog>
+
+<app-comment-dialog [(visible)]="showCommentDialog" [ticketId]="selectedTicketId"
+  (commentAdded)="onCommentAdded($event)">
+</app-comment-dialog>

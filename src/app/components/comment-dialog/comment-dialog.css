@@ -1,0 +1,84 @@
+.comment-dialog :host ::ng-deep .p-dialog-content {
+  padding: 1.5rem;
+}
+
+.comments-container {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color) var(--surface-200);
+}
+
+.comments-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.comments-container::-webkit-scrollbar-track {
+  background: var(--surface-200);
+  border-radius: 10px;
+}
+
+.comments-container::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 10px;
+}
+
+.comment-item {
+  transition: all 0.2s ease;
+  background-color: var(--surface-card);
+}
+
+.comment-item:hover {
+  box-shadow: var(--card-shadow);
+  transform: translateY(-1px);
+}
+
+.comment-item .pi {
+  font-size: 0.875rem;
+}
+
+.new-comment textarea {
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.2s;
+}
+
+.new-comment textarea:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-color);
+}
+
+.ticket-info {
+  background-color: var(--surface-ground);
+  border-left: 4px solid var(--primary-color) !important;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.comment-item:first-of-type {
+  animation: slideIn 0.3s ease;
+}
+
+:host ::ng-deep .p-avatar.p-avatar-circle {
+  background-color: var(--primary-color);
+  color: var(--primary-color-text);
+}
+
+.text-center.surface-ground {
+  background-color: var(--surface-ground);
+  border-radius: 8px;
+  padding: 2rem !important;
+}
+
+.text-center.surface-ground i {
+  display: block;
+  margin-bottom: 0.5rem;
+}

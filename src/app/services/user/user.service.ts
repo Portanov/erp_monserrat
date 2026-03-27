@@ -1,6 +1,5 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { inject } from '@angular/core';
 
 export interface UserData {
   id: number;
@@ -15,7 +14,6 @@ export interface UserData {
   role: string;
   status: string;
 }
-
 
 @Injectable({
   providedIn: 'root',
@@ -47,11 +45,44 @@ export class UserService {
       registeredDate: '15/06/2024',
       role: 'Usuario',
       status: 'Activo'
+    },
+    {
+      id: 3,
+      username: 'Juana',
+      email: 'juana@example.com',
+      fullName: 'Juana García Pérez',
+      password: 'pattern123@',
+      phone: '5598765432',
+      address: 'Calle Reforma 456, CDMX',
+      birthDate: new Date(1995, 7, 20),
+      registeredDate: '15/06/2024',
+      role: 'Usuario',
+      status: 'Activo'
     }
   ];
 
-  currentUser = signal<UserData | null>(null);
+  private currentUserSignal = signal<UserData | null>(null);
+  currentUser = this.currentUserSignal.asReadonly();
+  isAuthenticated = computed(() => this.currentUserSignal() !== null);
+
   private router = inject(Router);
+
+  constructor() {
+    this.loadFromStorage();
+  }
+
+  private loadFromStorage(): void {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        this.currentUserSignal.set(user);
+      } catch (e) {
+        console.error('Error parsing user from localStorage', e);
+        localStorage.removeItem('user');
+      }
+    }
+  }
 
   getAll(): UserData[] {
     return [...this.users];
@@ -77,53 +108,61 @@ export class UserService {
     return true;
   }
 
-  update(user: UserData): boolean {
-    const index = this.users.findIndex(u => u.username === user.username);
-    if (index === -1) return false;
+  update(user: UserData): UserData | null {
+    const index = this.users.findIndex(u => u.id === user.id);
+    if (index === -1) return null;
     if (user.phone) {
       const cleanPhone = user.phone.replace(/\D/g, '');
-      if (!this.isPhoneValid(cleanPhone)) return false;
+      if (!this.isPhoneValid(cleanPhone)) return null;
     }
     this.users[index] = { ...user };
-    const cur = this.currentUser();
-    if (cur && cur.username === user.username) this.currentUser.set({ ...user });
+    const cur = this.currentUserSignal();
+    if (cur && cur.id === user.id) {
+      this.currentUserSignal.set({ ...user });
+      localStorage.setItem('user', JSON.stringify(user));
+    }
+    return { ...user };
+  }
+
+  getByUsername(username: string): UserData | undefined {
+    const found = this.users.find(u => u.username === username);
+    return found ? { ...found } : undefined;
+  }
+
+  getById(id: number): UserData | undefined {
+    const found = this.users.find(u => u.id === id);
+    return found ? { ...found } : undefined;
+  }
+
+  getByEmail(email: string): UserData | undefined {
+    const found = this.users.find(u => u.email === email);
+    return found ? { ...found } : undefined;
+  }
+
+  delete(username: string): boolean {
+    const idx = this.users.findIndex(u => u.username === username);
+    if (idx === -1) return false;
+    const removed = this.users.splice(idx, 1);
+    const cur = this.currentUserSignal();
+    if (cur && cur.username === username) this.logout();
+    return removed.length > 0;
+  }
+
+  login(identifier: string, password: string): boolean {
+    const user = this.users.find(u => (u.username === identifier || u.email === identifier) && u.password === password);
+    if (!user) return false;
+    this.currentUserSignal.set({ ...user });
+    localStorage.setItem('user', JSON.stringify(user));
     return true;
   }
 
-    getByUsername(username: string): UserData | undefined {
-      const found = this.users.find(u => u.username === username);
-      return found ? { ...found } : undefined;
-    }
-
-    delete (username: string): boolean {
-      const idx = this.users.findIndex(u => u.username === username);
-      if (idx === -1) return false;
-      const removed = this.users.splice(idx, 1);
-      const cur = this.currentUser();
-      if (cur && cur.username === username) this.logout();
-      return removed.length > 0;
-    }
-
-    login(identifier: string, password: string): boolean {
-      const user = this.users.find(u => (u.username === identifier || u.email === identifier) && u.password === password);
-      if (!user) return false;
-      this.currentUser.set({ ...user });
-      localStorage.setItem('user', JSON.stringify(user));
-      return true;
-    }
-
-    logout() {
-      this.currentUser.set(null);
-      localStorage.removeItem('user');
-      this.router.navigate(['/login']);
-    }
-
-    getCurrentUser(): UserData | null {
-      localStorage.getItem('user') && this.currentUser.set(JSON.parse(localStorage.getItem('user')!));
-      return this.currentUser();
-    }
-
-    isAuthenticated(): boolean {
-      return !!localStorage.getItem('user');
-    }
+  logout() {
+    this.currentUserSignal.set(null);
+    localStorage.removeItem('user');
+    this.router.navigate(['/login']);
   }
+
+  getCurrentUser(): UserData | null {
+    return this.currentUserSignal();
+  }
+}

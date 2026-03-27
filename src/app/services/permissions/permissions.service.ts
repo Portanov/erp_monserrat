@@ -2,11 +2,7 @@ import { Injectable, signal, computed, inject } from '@angular/core';
 import { UserService } from '../user/user.service';
 
 export interface PagePermissions {
-  create?: boolean;
-  view?: boolean;
-  edit?: boolean;
-  delete?: boolean;
-  [key: string]: boolean | undefined;
+  [permissionKey: string]: boolean | undefined;
 }
 
 export interface UserPermissions {
@@ -15,11 +11,30 @@ export interface UserPermissions {
   };
 }
 
+export interface PageConfig {
+  name: string;
+  label: string;
+  permissions: string[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class PermissionService {
   private userService = inject(UserService);
+
+  private pagesConfig = signal<PageConfig[]>([
+    {
+      name: 'group',
+      label: 'Grupos',
+      permissions: ['view', 'create', 'edit', 'delete']
+    },
+    {
+      name: 'users',
+      label: 'Usuarios',
+      permissions: ['view', 'create', 'edit', 'delete', 'editState']
+    }
+  ]);
 
   private permissions = signal<UserPermissions>({
     1: {
@@ -34,13 +49,8 @@ export class PermissionService {
         create: true,
         edit: true,
         delete: true,
-      },
-      'profile': {
-        view: true,
-        create: true,
-        edit: true,
-        delete: true
-      },
+        editState: true,
+      }
     },
     2: {
       'group': {
@@ -53,28 +63,43 @@ export class PermissionService {
         view: false,
         create: false,
         edit: false,
-        delete: false
-      },
-      'profile': {
+        delete: false,
+        editState: false
+      }
+    },
+    3: {
+      'group': {
         view: true,
         create: false,
         edit: false,
         delete: false
       },
+      'users': {
+        view: false,
+        create: false,
+        edit: false,
+        delete: false,
+        editState: false
+      }
     }
   });
 
   currentUserPermissions = computed(() => {
-    const currentUser = this.userService.getCurrentUser();
+    const currentUser = this.userService.currentUser();
     if (!currentUser) return null;
-
     return this.permissions()[currentUser.id] || {};
   });
 
-  constructor() { }
+  getPagesConfig(): PageConfig[] {
+    return this.pagesConfig();
+  }
+
+  getPagePermissionsConfig(pageName: string): PageConfig | undefined {
+    return this.pagesConfig().find(p => p.name === pageName);
+  }
 
   hasPermission(page: string, action: string): boolean {
-    const currentUser = this.userService.getCurrentUser();
+    const currentUser = this.userService.currentUser(); // Usar el signal
     if (!currentUser) return false;
 
     const userPermissions = this.permissions()[currentUser.id];
@@ -94,7 +119,7 @@ export class PermissionService {
   }
 
   getPagePermissions(page: string): PagePermissions | null {
-    const currentUser = this.userService.getCurrentUser();
+    const currentUser = this.userService.currentUser(); // Usar el signal
     if (!currentUser) return null;
 
     const userPermissions = this.permissions()[currentUser.id];
@@ -103,50 +128,22 @@ export class PermissionService {
 
   assignPermissions(userId: number, page: string, permissions: PagePermissions): void {
     this.permissions.update(perms => {
-      if (!perms[userId]) {
-        perms[userId] = {};
+      const newPerms = { ...perms };
+      if (!newPerms[userId]) {
+        newPerms[userId] = {};
       }
 
-      if (!perms[userId][page]) {
-        perms[userId][page] = {};
-      }
-
-      perms[userId][page] = {
-        ...perms[userId][page],
+      newPerms[userId][page] = {
+        ...newPerms[userId][page],
         ...permissions
       };
 
-      return { ...perms };
-    });
-  }
-
-  updatePermissions(userId: number, page: string, permissions: PagePermissions): void {
-    this.permissions.update(perms => {
-      if (perms[userId] && perms[userId][page]) {
-        perms[userId][page] = {
-          ...perms[userId][page],
-          ...permissions
-        };
-      }
-      return { ...perms };
-    });
-  }
-
-  removePermissions(userId: number, page: string): void {
-    this.permissions.update(perms => {
-      if (perms[userId]) {
-        delete perms[userId][page];
-      }
-      return { ...perms };
+      return newPerms;
     });
   }
 
   getUserPermissions(userId: number): { [page: string]: PagePermissions } | null {
     return this.permissions()[userId] || null;
-  }
-
-  getAllUsersWithPermissions(): number[] {
-    return Object.keys(this.permissions()).map(key => Number(key));
   }
 
   getUserPages(userId: number): string[] {
@@ -156,11 +153,9 @@ export class PermissionService {
 
   checkUserPermission(userId: number, page: string, action: string): boolean {
     const userPermissions = this.permissions()[userId];
-
     if (!userPermissions || !userPermissions[page]) {
       return false;
     }
-
     return userPermissions[page][action] || false;
   }
 
@@ -168,48 +163,39 @@ export class PermissionService {
     return this.hasPermission(page, 'view');
   }
 
-  copyPermissions(fromUserId: number, toUserId: number): void {
-    const sourcePermissions = this.permissions()[fromUserId];
-    if (!sourcePermissions) return;
+  initializeUserPermissions(userId: number): void {
+    const defaultPermissions: { [page: string]: PagePermissions } = {};
 
-    this.permissions.update(perms => {
-      perms[toUserId] = JSON.parse(JSON.stringify(sourcePermissions));
-      return { ...perms };
+    this.pagesConfig().forEach(pageConfig => {
+      const pagePermissions: PagePermissions = {};
+      pageConfig.permissions.forEach(permission => {
+        pagePermissions[permission] = false;
+      });
+      defaultPermissions[pageConfig.name] = pagePermissions;
     });
-  }
-
-  initializeUserPermissions(userId: number, defaultPermissions?: { [page: string]: PagePermissions }): void {
-    const defaultPerms = defaultPermissions || {
-      'group': {
-        view: false,
-        create: false,
-        edit: false,
-        delete: false
-      },
-      'users': {
-        view: false,
-        create: false,
-        edit: false,
-        delete: false
-      },
-      'profile': {
-        view: false,
-        create: false,
-        edit: false,
-        delete: false
-      },
-    };
 
     this.permissions.update(perms => {
-      perms[userId] = defaultPerms;
-      return { ...perms };
+      const newPerms = { ...perms };
+      newPerms[userId] = defaultPermissions;
+      return newPerms;
     });
   }
 
   removeUser(userId: number): void {
     this.permissions.update(perms => {
-      delete perms[userId];
-      return { ...perms };
+      const newPerms = { ...perms };
+      delete newPerms[userId];
+      return newPerms;
     });
+  }
+
+  isValidPermission(page: string, action: string): boolean {
+    const pageConfig = this.getPagePermissionsConfig(page);
+    return pageConfig ? pageConfig.permissions.includes(action) : false;
+  }
+
+  getAvailablePermissions(page: string): string[] {
+    const pageConfig = this.getPagePermissionsConfig(page);
+    return pageConfig ? pageConfig.permissions : [];
   }
 }

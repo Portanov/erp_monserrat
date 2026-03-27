@@ -1,0 +1,48 @@
+.kanban-container {
+  overflow-y: auto;
+  padding-bottom: 20px;
+}
+
+.tickets-container {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.tickets-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tickets-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.tickets-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.tickets-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.p-draggable {
+  transition: all 0.2s;
+}
+
+.p-draggable-dragging {
+  opacity: 0.5;
+  transform: scale(1.02);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+}
+
+.p-droppable {
+  transition: background-color 0.2s;
+}
+
+.p-droppable.p-droppable-active {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+

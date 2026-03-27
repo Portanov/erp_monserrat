@@ -1,4 +1,4 @@
-import { Component, ViewChild, OnInit } from '@angular/core';
+import { Component, ViewChild, OnInit, inject, effect } from '@angular/core';
 import { AvatarModule } from 'primeng/avatar';
 import { ButtonModule } from 'primeng/button';
 import { Drawer, DrawerModule } from 'primeng/drawer';
@@ -6,6 +6,7 @@ import { RippleModule } from 'primeng/ripple';
 import { UserService } from '../../services/user/user.service';
 import { PermissionService } from '../../services/permissions/permissions.service';
 import { PanelMenuModule } from 'primeng/panelmenu';
+import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-sidebar',
@@ -65,10 +66,16 @@ export class Sidebar implements OnInit {
   visible: boolean = false;
   opciones: any[] = [];
 
-  constructor(
-    private userService: UserService,
-    private permissionService: PermissionService
-  ) { }
+  private userService = inject(UserService);
+  private permissionService = inject(PermissionService);
+
+  constructor() {
+    effect(() => {
+      this.userService.currentUser();
+      this.permissionService.currentUserPermissions();
+      this.actualizarMenu();
+    });
+  }
 
   ngOnInit(): void {
     this.actualizarMenu();
@@ -76,7 +83,6 @@ export class Sidebar implements OnInit {
 
   toggleDrawer(): void {
     this.visible = true;
-    this.actualizarMenu();
   }
 
   onDrawerShow(): void {
@@ -85,31 +91,56 @@ export class Sidebar implements OnInit {
 
   actualizarMenu(): void {
     const auth = this.userService.isAuthenticated();
+    const currentUser = this.userService.getCurrentUser();
 
     const rutasUniversales = [
       { label: 'Landing', routerLink: '/', icon: 'pi pi-home', visible: true },
     ];
 
     const rutasProtegidas = [
-      { label: 'Group', routerLink: '/group', icon: 'pi pi-chart-bar', page: 'group' },
-      { label: 'User', routerLink: '/user', icon: 'pi pi-users', page: 'users' },
+      {
+        label: 'Grupos',
+        routerLink: '/group',
+        icon: 'pi pi-chart-bar',
+        page: 'group',
+        permission: 'group.view'
+      },
+      {
+        label: 'Usuarios',
+        routerLink: '/user',
+        icon: 'pi pi-users',
+        page: 'users',
+        permission: 'users.view'
+      }
     ];
 
     const rutaPerfil = [
-      { label: 'Profile', routerLink: '/profile', icon: 'pi pi-user', visible: auth },
+      { label: 'Perfil', routerLink: '/profile', icon: 'pi pi-user', visible: auth },
     ];
 
     const rutaLogin = [
-      { label: 'Login', routerLink: '/login', icon: 'pi pi-sign-in', visible: !auth },
+      { label: 'Iniciar Sesión', routerLink: '/login', icon: 'pi pi-sign-in', visible: !auth },
     ];
 
     const rutaCierreSesion = [
-      { label: 'Cerrar sesión', icon: 'pi pi-sign-out', command: () => this.logout(), visible: auth },
+      {
+        label: 'Cerrar sesión',
+        icon: 'pi pi-sign-out',
+        command: () => this.logout(),
+        visible: auth
+      },
     ];
 
     const rutasProtegidasFiltradas = rutasProtegidas
-      .filter(ruta => this.permissionService.hasPermission(ruta.page, 'view'))
-      .map(({ page, ...rest }) => ({ ...rest, visible: true }));
+      .filter(ruta => {
+        if (!auth) return false;
+        if (ruta.permission) {
+          const [page, action] = ruta.permission.split('.');
+          return this.permissionService.hasPermission(page, action);
+        }
+        return true;
+      })
+      .map(ruta => ({ ...ruta, visible: true }));
 
     this.opciones = [
       ...rutasUniversales,

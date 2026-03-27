@@ -1,0 +1,52 @@
+.group-config {
+  padding: 1rem;
+}
+
+:host ::ng-deep .p-speeddial {
+  position: relative;
+  display: inline-block;
+}
+
+:host ::ng-deep .p-speeddial-button {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+:host ::ng-deep .p-fieldset {
+  margin-bottom: 1rem;
+}
+
+:host ::ng-deep .p-checkbox {
+  margin-right: 0.5rem;
+}
+
+.group-config ::ng-deep .p-speeddial {
+  position: relative;
+  display: inline-block;
+}
+
+.group-config ::ng-deep .p-speeddial-button {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: var(--primary-color);
+}
+
+.group-config ::ng-deep .p-speeddial-action {
+  width: 2rem;
+  height: 2rem;
+}
+
+.permissions-section ::ng-deep .p-fieldset {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+}
+
+.permissions-section ::ng-deep .p-fieldset .p-fieldset-legend {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  padding: 0.5rem 1rem;
+}
+
+.permissions-section ::ng-deep .p-checkbox .p-checkbox-box {
+  border-radius: 4px;
+}

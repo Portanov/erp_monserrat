@@ -1,0 +1,38 @@
+/* ticket-table.css */
+:host ::ng-deep .p-datatable .p-datatable-tbody>tr {
+  transition: background-color 0.2s;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-tbody>tr:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+:host ::ng-deep .p-tag {
+  min-width: 90px;
+  justify-content: center;
+}
+
+.italic {
+  font-style: italic;
+}
+
+.text-red-500 {
+  color: #ef4444 !important;
+}
+
+/* Estilos para el avatar */
+:host ::ng-deep .p-avatar {
+  background-color: var(--primary-color);
+  color: var(--primary-color-text);
+}
+
+/* Estilos para los botones de acción */
+:host ::ng-deep .p-button.p-button-text.p-button-sm {
+  width: 2rem;
+  height: 2rem;
+}
+
+/* Animación de carga */
+:host ::ng-deep .p-datatable .p-datatable-loading-overlay {
+  background: rgba(255, 255, 255, 0.8);
+}

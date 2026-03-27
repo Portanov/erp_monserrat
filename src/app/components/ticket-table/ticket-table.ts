@@ -1,0 +1,179 @@
+import { Component, Input, SimpleChanges, inject, ViewChild, Output, EventEmitter } from '@angular/core';
+import { Table, TableModule } from 'primeng/table';
+import { FormsModule } from '@angular/forms';
+import { TicketsService, Ticket } from '../../services/tickets/tickets.service';
+import { CommonModule } from '@angular/common';
+import { TagModule } from 'primeng/tag';
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { AvatarModule } from 'primeng/avatar';
+import { TooltipModule } from 'primeng/tooltip';
+import { SelectModule } from 'primeng/select';
+import { IconFieldModule } from 'primeng/iconfield';
+import { InputIconModule } from 'primeng/inputicon';
+import { UserService } from '../../services/user/user.service';
+import { TicketDialogComponent } from '../ticket-dialog/ticket-dialog';
+import { CommentDialogComponent } from '../comment-dialog/comment-dialog';
+import { AlertService } from '../../services/alerts/alert.service';
+
+interface Column {
+  field: string;
+  header: string;
+}
+
+interface FilterOption {
+  label: string;
+  value: string;
+}
+
+@Component({
+  selector: 'app-ticket-table',
+  imports: [
+    TableModule,
+    CommonModule,
+    FormsModule,
+    TagModule,
+    ButtonModule,
+    InputTextModule,
+    AvatarModule,
+    TooltipModule,
+    SelectModule,
+    IconFieldModule,
+    InputIconModule,
+    TicketDialogComponent,
+    CommentDialogComponent
+  ],
+  templateUrl: './ticket-table.html',
+  styleUrl: './ticket-table.css',
+  standalone: true
+})
+export class TicketTable {
+  @Input() groupId: number | null = null;
+  @ViewChild('dt1') dt1!: Table;
+  @Output() onTicketMoved = new EventEmitter<void>();
+
+  public ticketsService = inject(TicketsService);
+  public userService = inject(UserService);
+  public alertService = inject(AlertService);
+
+  tickets: Ticket[] = [];
+  loading: boolean = true;
+  usuario = this.userService.currentUser();
+  showTicketDialog: boolean = false;
+  showCommentDialog: boolean = false;
+  selectedTicketId: string | null = null;
+
+  statusOptions: FilterOption[] = [
+    { label: 'Pendiente', value: 'pending' },
+    { label: 'En Progreso', value: 'in-progress' },
+    { label: 'Revisión', value: 'review' },
+    { label: 'Hecho', value: 'done' },
+    { label: 'Bloqueado', value: 'blocked' }
+  ];
+
+  priorityOptions: FilterOption[] = [
+    { label: 'Alta', value: 'alta' },
+    { label: 'Media', value: 'media' },
+    { label: 'Baja', value: 'baja' },
+    { label: 'Urgente', value: 'urgente' },
+    { label: 'Crítica', value: 'crítica' },
+    { label: 'Normal', value: 'normal' },
+    { label: 'Opcional', value: 'opcional' }
+  ];
+
+  columns: Column[] = [
+    { field: 'id', header: 'ID' },
+    { field: 'title', header: 'Título' },
+    { field: 'status', header: 'Estado' },
+    { field: 'priority', header: 'Prioridad' },
+    { field: 'assignedToId', header: 'Asignado a' },
+    { field: 'dueDate', header: 'Fecha Límite' }
+  ];
+
+  ngOnInit() {
+    this.loadTickets();
+  }
+
+  public loadTickets() {
+    if (!this.groupId) {
+      console.log('No hay groupId, limpiando tabla');
+      this.tickets = [];
+      this.loading = false;
+      return;
+    }
+    this.loading = true;
+    setTimeout(() => {
+      this.tickets = this.ticketsService.getTicketsByGroup(this.groupId!);
+      console.log('Tickets cargados en tabla:', this.tickets.length);
+      this.loading = false;
+    }, 300);
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['groupId'] && !changes['groupId'].firstChange) {
+      console.log('groupId cambiado en tabla, recargando...');
+      this.loadTickets();
+    }
+  }
+
+  updateTicketStatus(ticket: Ticket) {
+    try {
+      const updatedTicket = this.ticketsService.updateTicket(ticket);
+      const index = this.tickets.findIndex(t => t.id === ticket.id);
+      if (index !== -1) {
+        this.tickets[index] = updatedTicket;
+      }
+      this.alertService.success('Ticket Actualizado', `Ticket ${ticket.id} movido a ${this.ticketsService.getStatusLabel(ticket.status)}`)
+      this.onTicketMoved.emit();
+    } catch (error) {
+      console.error('Error al actualizar el estado:', error);
+      this.loadTickets();
+    }
+  }
+
+  onStatusEditComplete(event: any, ticket: Ticket) {
+    this.updateTicketStatus(ticket);
+  }
+
+  openEditTicket(ticket: Ticket) {
+    this.selectedTicketId = ticket.id;
+    this.showTicketDialog = true;
+  }
+
+  openCommentDialog(ticket: Ticket) {
+    this.selectedTicketId = ticket.id;
+    this.showCommentDialog = true;
+  }
+
+  onTicketSaved(ticket: Ticket) {
+    this.loadTickets();
+    this.showTicketDialog = false;
+  }
+
+  onCommentAdded(comment: any) {
+    this.loadTickets();
+    this.showCommentDialog = false;
+  }
+
+  clear(table: Table) {
+    table.clear();
+  }
+
+  getStatusSeverity(status: string): string {
+    return this.ticketsService.getStatusSeverity(status as any);
+  }
+
+  getPrioritySeverity(priority: string): string {
+    return this.ticketsService.getPrioritySeverity(priority as any);
+  }
+
+  getUserById(userId: number | null) {
+    if (!userId) return null;
+    return this.ticketsService.getUserById(userId);
+  }
+
+  isOverdue(ticket: Ticket): boolean {
+    if (!ticket.dueDate || ticket.status === 'done') return false;
+    return new Date(ticket.dueDate) < new Date();
+  }
+}

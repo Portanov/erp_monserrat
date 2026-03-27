@@ -1,130 +1,166 @@
 <div class="mt-16 m-4 h-screen">
-  <p-dialog header="Crear Usuario" [modal]="true" [(visible)]="createdVisible" [style]="{ width: '50rem'}">
-    <div class="flex flex-col gap-4">
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label>Username</label>
-          <input pInputText [(ngModel)]="newUser.username" class="w-full" required />
-        </div>
-        <div>
-          <label>Email</label>
-          <input pInputText type="email" [(ngModel)]="newUser.email" class="w-full" required />
-        </div>
-        <div>
-          <label>Full Name</label>
-          <input pInputText [(ngModel)]="newUser.fullName" class="w-full" required />
-        </div>
-        <div>
-          <label>Password</label>
-          <p-password [(ngModel)]="newUser.password" class="w-full" required />
-        </div>
-        <div>
-          <label>Role</label>
-          <p-select [options]="roles" [(ngModel)]="newUser.role" optionLabel="label" optionValue="value" class="w-full" />
-        </div>
-        <div>
-          <label>Phone</label>
-          <p-inputMask mask="(999) 999-9999" [(ngModel)]="newUser.phone" class="w-full ms-2" />
-        </div>
-        <div>
-          <label>Address</label>
-          <input pInputText [(ngModel)]="newUser.address" class="w-full" />
-        </div>
-        <div class="col-span-2">
-          <label>Birth Date</label>
-          <p-datepicker [(ngModel)]="newUser.birthDate" dateFormat="dd/mm/yy" placeholder="dd/mm/yyyy" pInputMask="99/99/9999" showIcon iconDisplay="input" />
-        </div>
-      </div>
-    </div>
-    <ng-template pTemplate="footer">
-      <p-button label="Cancelar" icon="pi pi-times" (onClick)="closeCreateDialog()" severity="secondary"></p-button>
-      <p-button label="Guardar" icon="pi pi-check" (onClick)="saveUser()" severity="primary"></p-button>
-    </ng-template>
+  <p-dialog [header]="isEditing ? 'Editar Usuario y Permisos' : 'Crear Usuario'" [modal]="true"
+    [(visible)]="createdVisible" [style]="{ width: '80rem' }">
+    <p-stepper [(value)]="activeStep">
+      <p-step-list>
+        <p-step [value]="1">Información</p-step>
+        <p-step [value]="2">Permisos</p-step>
+      </p-step-list>
+      <p-step-panels>
+        <p-step-panel [value]="1">
+          <ng-template #content let-activateCallback="activateCallback">
+            <div class="flex flex-col gap-4">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label>Username</label>
+                  <input pInputText [(ngModel)]="newUser.username" class="w-full" required [readonly]="isEditing" />
+                </div>
+                <div>
+                  <label>Email</label>
+                  <input pInputText type="email" [(ngModel)]="newUser.email" class="w-full" required />
+                </div>
+                <div>
+                  <label>Full Name</label>
+                  <input pInputText [(ngModel)]="newUser.fullName" class="w-full" required />
+                </div>
+                <div>
+                  <label>Password</label>
+                  <p-password [(ngModel)]="newUser.password" class="w-full" required fluid />
+                </div>
+                <div>
+                  <label>Role</label>
+                  <p-select [options]="roles" [(ngModel)]="newUser.role" optionLabel="label" optionValue="value"
+                    class="w-full" />
+                </div>
+                <div>
+                  <label>Phone</label>
+                  <p-inputMask mask="(999) 999-9999" [(ngModel)]="newUser.phone" class="w-full" fluid />
+                </div>
+                <div>
+                  <label>Address</label>
+                  <input pInputText [(ngModel)]="newUser.address" class="w-full" />
+                </div>
+                <div>
+                  <label>Birth Date</label>
+                  <p-datepicker [(ngModel)]="newUser.birthDate" dateFormat="dd/mm/yy" placeholder="dd/mm/yyyy"
+                    pInputMask="99/99/9999" showIcon iconDisplay="input" fluid [appendTo]="'body'" />
+                </div>
+              </div>
+            </div>
+            <div class="flex pt-6 justify-end">
+              <p-button label="Cancelar" icon="pi pi-times" (onClick)="closeCreateDialog()" severity="secondary"
+                class="me-2"></p-button>
+              <p-button label="Siguiente" icon="pi pi-arrow-right" iconPos="right" (onClick)="activateCallback(2)" />
+            </div>
+          </ng-template>
+        </p-step-panel>
+        <p-step-panel [value]="2">
+          <ng-template #content let-activateCallback="activateCallback">
+            <div class="flex flex-col gap-0">
+              <div class="mb-4">
+                <h2 class="text-lg font-extralight">Configuración de Permisos para {{ newUser.username || 'NuevoUsuario'
+                  }} </h2>
+                <p class="text-gray-600 text-sm">Configure los permisos de acceso para las diferentes páginas del
+                  sistema</p>
+              </div>
+
+              <div class="permissions-section max-h-[60vh] overflow-y-auto px-1">
+                @for (page of pages; track page.name) {
+                <p-fieldset [legend]="page.label" [toggleable]="true" [collapsed]="false" class="mb-1">
+                  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    @for (perm of getAvailablePermissions(page.name); track perm) {
+                    <div class="flex items-center gap-2 p-1 rounded-lg hover:bg-gray-800 transition-colors">
+                      <p-checkbox [(ngModel)]="userPermissions[page.name][perm]" [disabled]="isPermissionDisabled(page.name, perm)"
+                        [binary]="true" inputId="perm-{{page.name}}-{{perm}}">
+                      </p-checkbox>
+                      <label for="perm-{{page.name}}-{{perm}}" class="text-sm text-gray-300 cursor-pointer">
+                        {{ getPermissionLabel(perm) }}
+                      </label>
+                    </div>
+                    }
+                  </div>
+                </p-fieldset>
+                }
+              </div>
+            </div>
+            <div class="flex pt-6 justify-between">
+              <p-button label="Atrás" severity="secondary" icon="pi pi-arrow-left" (onClick)="activateCallback(1)" />
+              <div class="">
+                <p-button label="Cancelar" icon="pi pi-times" (onClick)="closeCreateDialog()" severity="secondary"
+                  class="me-2"></p-button>
+                <p-button label="Guardar" icon="pi pi-check" (onClick)="saveUser()" severity="primary"></p-button>
+              </div>
+            </div>
+          </ng-template>
+        </p-step-panel>
+      </p-step-panels>
+    </p-stepper>
   </p-dialog>
+
   <div class="grid grid-cols-5 gap-0">
     <div class="col-span-4 p-4">
-      <p-table [value]="users" dataKey="username" editMode="row">
+      <p-table [value]="users" dataKey="username" editMode="cell">
         <ng-template #header>
           <tr>
-            <th style="width:20%">Username</th>
+            <th style="width:15%">Username</th>
             <th style="width:20%">Email</th>
             <th style="width:20%">Full Name</th>
             <th style="width:15%">Role</th>
             <th style="width:15%">Status</th>
-            <th style="width:10%"></th>
+            <th style="width:15%">Acciones</th>
           </tr>
         </ng-template>
-        <ng-template #body let-user let-editing="editing" let-ri="rowIndex">
-          <tr [pEditableRow]="user">
+        <ng-template #body let-user>
+          <tr>
+            <td>{{ user.username }}</td>
+            <td>{{ user.email }}</td>
+            <td>{{ user.fullName }}</td>
+            <td>{{ user.role }}</td>
             <td>
-              <p-cellEditor>
-                <ng-template #input>
-                  <input pInputText type="text" [(ngModel)]="user.username" readonly />
-                </ng-template>
-                <ng-template #output>
-                  {{ user.username }}
-                </ng-template>
-              </p-cellEditor>
-            </td>
-            <td>
-              <p-cellEditor>
-                <ng-template #input>
-                  <input pInputText type="email" [(ngModel)]="user.email" />
-                </ng-template>
-                <ng-template #output>
-                  {{ user.email }}
-                </ng-template>
-              </p-cellEditor>
-            </td>
-            <td>
-              <p-cellEditor>
-                <ng-template #input>
-                  <input pInputText type="text" [(ngModel)]="user.fullName" />
-                </ng-template>
-                <ng-template #output>
-                  {{ user.fullName }}
-                </ng-template>
-              </p-cellEditor>
-            </td>
-            <td>
-              <p-cellEditor>
-                <ng-template #input>
-                  <p-select [options]="roles" appendTo="body" [(ngModel)]="user.role" [style]="{ width: '100%' }" />
-                </ng-template>
-                <ng-template #output>
-                  {{ user.role }}
-                </ng-template>
-              </p-cellEditor>
-            </td>
-            <td>
-              <p-cellEditor>
-                <ng-template #input>
-                  <p-select [options]="statuses" appendTo="body" [(ngModel)]="user.status"
-                    [style]="{ width: '100%' }" />
-                </ng-template>
-                <ng-template #output>
-                  <p-tag [value]="user.status" [severity]="getSeverity(user.status)" />
-                </ng-template>
-              </p-cellEditor>
-            </td>
-            <td>
-              <div class="flex items-center justify-center gap-2">
-                <button *ngIf="!editing" pButton pRipple type="button" pInitEditableRow icon="pi pi-pencil"
-                  (click)="onRowEditInit(user)" text rounded severity="secondary"></button>
-                <button *ngIf="editing" pButton pRipple type="button" pSaveEditableRow icon="pi pi-check"
-                  (click)="onRowEditSave(user)" text rounded severity="secondary"></button>
-                <button *ngIf="editing" pButton pRipple type="button" pCancelEditableRow icon="pi pi-times"
-                  (click)="onRowEditCancel(user, ri)" text rounded severity="secondary"></button>
-                <button pButton pRipple type="button" icon="pi pi-trash" (click)="deleteUser(user.username)" text
-                  rounded severity="danger"></button>
+              <div class="" *appHasPermission="'users.editState'">
+                <div [pEditableColumn]="user.status" (onEditComplete)="onStatusEditComplete($event, user)">
+                  <p-cellEditor>
+                    <ng-template #input>
+                      <p-select [(ngModel)]="user.status" [options]="statuses" optionLabel="label" optionValue="value"
+                        appendTo="body" [style]="{ width: '100%' }" (onChange)="updateUserStatus(user)">
+                      </p-select>
+                    </ng-template>
+                    <ng-template #output>
+                      <p-tag [value]="user.status" [severity]="getSeverity(user.status)" class="cursor-pointer">
+                      </p-tag>
+                    </ng-template>
+                  </p-cellEditor>
+                </div>
               </div>
+              @if (!hasPermission('users', 'editState')) {
+              <div>
+                <p-tag [value]="user.status" [severity]="getSeverity(user.status)">
+                </p-tag>
+              </div>
+              }
+            </td>
+            <td>
+              @if (user.id !== currentUserId() && hasPermission('users', 'delete')) {
+                <div class="flex items-center justify-center gap-2">
+                  <button pButton pRipple type="button" icon="pi pi-pencil" (click)="editUser(user)" text rounded
+                    severity="secondary" pTooltip="Editar usuario y permisos" *appHasPermission="'users.edit'"></button>
+                  <button pButton pRipple type="button" icon="pi pi-trash" (click)="deleteUser(user.username)" text
+                    rounded severity="danger" pTooltip="Eliminar usuario" *appHasPermission="'users.delete'"></button>
+                </div>
+              }
             </td>
           </tr>
         </ng-template>
       </p-table>
     </div>
     <div class="p-4 bg-gray-900 rounded-lg h-screen">
-      <p-panelMenu [model]="items"></p-panelMenu>
+      <p-panelMenu [model]="items" *appHasPermission="'users.create'"></p-panelMenu>
+      @if (!hasPermission('users','create')) {
+      <div class="text-center p-4 text-gray-400">
+        <i class="pi pi-exclamation-triangle"></i>
+        No tienes permisos para ver opciones en este menú
+      </div>
+      }
     </div>
   </div>
 </div>

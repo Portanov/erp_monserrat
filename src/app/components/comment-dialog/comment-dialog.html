@@ -1,0 +1,67 @@
+<!-- comment-dialog.html -->
+<p-dialog [(visible)]="visible" [style]="{ width: '550px', height: '580px' }" header="Comentarios del Ticket"
+  [modal]="true" styleClass="p-fluid comment-dialog" (onHide)="onHide()">
+
+  <ng-template #content>
+    @if (loading) {
+    <div class="flex justify-content-center p-4">
+      <p-progressSpinner></p-progressSpinner>
+    </div>
+    } @else {
+    <p-scrollpanel [style]="{ width: '100%', height: '270px' }">
+      <div class="comments-container mb-3" style="max-height: 400px; overflow-y: auto;">
+        @if (comments.length === 0) {
+        <div class="text-center p-3 font-extralight">
+          <i class="pi pi-comments text-3xl text-color-secondary mb-2"></i>
+          <p class="text-color-secondary m-0">No hay comentarios aún</p>
+          <p class="text-color-secondary text-sm">Sé el primero en comentar</p>
+        </div>
+        }
+
+        @for (comment of comments; track comment.id) {
+        @let user = getUserById(comment.userId);
+        <p-card class="border-b rounded-none border-gray-700 mb-1 p-3 pb-1">
+          <ng-template #header>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <p-avatar [label]="user?.fullName?.charAt(0) || '?'"
+                  [style]="{ 'background-color': '#dee9fc', color: '#1a2551' }" shape="circle">
+                </p-avatar>
+                <span class="font-light">{{user?.fullName || 'Usuario'}}</span>
+              </div>
+              <div>
+                <span class="text-xs text-color-secondary">{{comment.createdAt | date:'dd/MM/yyyy HH:mm'}}</span>
+              </div>
+            </div>
+          </ng-template>
+          <p class="text-sm -mt-1">{{comment.content}}</p>
+        </p-card>
+        }
+      </div>
+    </p-scrollpanel>
+
+    <div class="new-comment">
+      <label for="newComment" class="font-extralight text-sm">Agregar Comentario</label>
+      <textarea id="newComment" pInputTextarea [(ngModel)]="newComment" rows="2"
+        [class.ng-invalid]="submitted && !newComment" placeholder="Escribe tu comentario..." class="w-full mt-2"
+        (keydown.enter)="!saving && save()" (keydown.shift.enter)="$event.stopPropagation()">
+        </textarea>
+      @if (submitted && !newComment) {
+      <small class="p-error">El comentario es requerido</small>
+      }
+      <small class="text-color-secondary block mt-1">
+        <i class="pi pi-info-circle mr-1"></i>
+        Presiona Enter para enviar, Shift+Enter para nueva línea
+      </small>
+    </div>
+    }
+  </ng-template>
+
+  <ng-template #footer>
+    <div class="flex justify-content-end gap-2">
+      <p-button label="Cancelar" icon="pi pi-times" [outlined]="true" (click)="close()" />
+      <p-button label="Enviar Comentario" icon="pi pi-send" (click)="save()" [loading]="saving"
+        [disabled]="!newComment" />
+    </div>
+  </ng-template>
+</p-dialog>

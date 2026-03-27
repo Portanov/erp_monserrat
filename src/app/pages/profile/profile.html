@@ -1,28 +1,278 @@
-<div class="flex items-center justify-center min-h-screen">
-  <p-card [style]="{width: '600px', 'border-radius': '24px'}" class="mt-16" >
-    <div class="flex justify-center -mt-16 mb-4">
-      <p-image src="images/gato_soldado.jpg" [preview]="true" imageClass="border-4" />
+<div class="mt-18 m-8 grid grid-cols-2 gap-6">
+  <div class="col-span-1">
+    <p-card [style]="{width: '100%', 'border-radius': '24px'}"
+      class="mb-6 shadow-lg hover:shadow-xl transition-shadow duration-300">
+      <div class="relative">
+        <div class="absolute inset-0 bg-linear-to-r from-blue-500 to-purple-600 rounded-t-2xl h-28"></div>
+        <div class="relative pt-16 px-6 pb-4">
+          <div class="flex items-end gap-4">
+            <p-image src="images/gato_soldado.jpg"
+              imageClass="border-4 border-white rounded-full w-28 h-28 shadow-lg"
+              class="rounded-full transform hover:scale-105 transition-transform duration-300">
+            </p-image>
+            <div class="flex-1 pb-2">
+              <h1 class="text-2xl font-bold text-gray-400 mb-1">{{ user?.fullName }}</h1>
+              <p class="text-gray-500 text-sm">@{{ user?.username }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-6 pb-4">
+        <div class="grid grid-cols-1 gap-3 mb-6 mt-4">
+          <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+            <i class="pi pi-envelope text-blue-500 w-5"></i>
+            <span class="text-gray-700">{{ user?.email }}</span>
+          </div>
+
+          @if (user?.phone) {
+          <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+            <i class="pi pi-phone text-green-500 w-5"></i>
+            <span class="text-gray-700">{{ user?.phone }}</span>
+          </div>
+          }
+
+          @if (user?.address) {
+          <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+            <i class="pi pi-map-marker text-red-500 w-5"></i>
+            <span class="text-gray-700">{{ user?.address }}</span>
+          </div>
+          }
+
+          @if (user?.birthDate) {
+          <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+            <i class="pi pi-calendar text-purple-500 w-5"></i>
+            <span class="text-gray-700">{{ user?.birthDate | date:'dd/MM/yyyy' }}</span>
+          </div>
+          }
+
+          <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+            <i class="pi pi-user text-indigo-500 w-5"></i>
+            <span class="text-gray-700">Rol: <span class="font-medium">{{ user?.role }}</span></span>
+          </div>
+
+          <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+            <i class="pi pi-calendar-clock text-orange-500 w-5"></i>
+            <span class="text-gray-700">Miembro desde: {{ user?.registeredDate }}</span>
+          </div>
+        </div>
+
+        <!-- Botones de acción -->
+        <div class="flex gap-3 justify-stretch mt-6">
+          <p-button label="Editar perfil" icon="pi pi-user-edit" severity="secondary" (onClick)="openEditDialog()"
+            class="flex-1" styleClass="w-full justify-center rounded-xl hover:scale-105 transition-transform">
+          </p-button>
+          <p-button (onClick)="logout()" label="Cerrar Sesión" icon="pi pi-sign-out" severity="primary" class="flex-1"
+            styleClass="w-full justify-center rounded-xl hover:scale-105 transition-transform">
+          </p-button>
+        </div>
+      </div>
+    </p-card>
+  </div>
+
+  <div class="col-span-1">
+    <div class="grid grid-cols-1 gap-6 mb-6">
+      <div class="grid grid-cols-3 gap-4">
+        <p-card class="h-full cursor-pointer transform hover:-translate-y-1 transition-all duration-300">
+          <ng-template pTemplate="header">
+            <div class="pt-4 text-center">
+              <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <i class="pi pi-ticket text-blue-600 text-xl"></i>
+              </div>
+              <h2 class="text-sm font-medium text-gray-600">Tickets Abiertos</h2>
+            </div>
+          </ng-template>
+          <div class="text-center p-4 pt-0">
+            <p class="text-3xl font-bold text-blue-600">{{ ticketStats.created.total }}</p>
+          </div>
+        </p-card>
+
+        <p-card class="h-full cursor-pointer transform hover:-translate-y-1 transition-all duration-300">
+          <ng-template pTemplate="header">
+            <div class="p-4 pb-0 text-center">
+              <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <i class="pi pi-spin pi-spinner text-yellow-600 text-xl"></i>
+              </div>
+              <h2 class="text-sm font-medium text-gray-600">En Progreso</h2>
+            </div>
+          </ng-template>
+          <div class="text-center p-4 pt-0">
+            <p class="text-3xl font-bold text-yellow-600">{{ ticketStats.assigned.inProgress }}</p>
+          </div>
+        </p-card>
+
+        <p-card class="h-full cursor-pointer transform hover:-translate-y-1 transition-all duration-300">
+          <ng-template pTemplate="header">
+            <div class="p-4 pb-0 text-center">
+              <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <i class="pi pi-check-circle text-green-600 text-xl"></i>
+              </div>
+              <h2 class="text-sm font-medium text-gray-600">Finalizados</h2>
+            </div>
+          </ng-template>
+          <div class="text-center p-4 pt-0">
+            <p class="text-3xl font-bold text-green-600">{{ ticketStats.assigned.done }}</p>
+          </div>
+        </p-card>
+      </div>
     </div>
-    <div class="text-center mb-6">
-      <h1 class="text-3xl font-bold text-gray-500 mb-1">@{{ user?.username }}</h1>
-      <p class="text-gray-500 flex items-center justify-center gap-2">
-        <i class="pi pi-envelope"></i>
-        {{ user?.email }}
-      </p>
-    </div>
-    <div class="flex gap-3 justify-center">
-      <p-button
-        label="Editar perfil"
-        icon="pi pi-user-edit"
-        severity="secondary">
-      </p-button>
-      <p-button
-        (onClick)="logout()"
-        label="Cerrar Sesion"
-        icon="pi pi-sign-out"
-        severity="primary">
-      </p-button>
-    </div>
-  </p-card>
+
+    @if (assignedTickets.length > 0) {
+    <p-card class="shadow-lg">
+      <ng-template pTemplate="header">
+        <div class="p-2 border-b border-gray-200">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="pi pi-list text-gray-400 text-xl"></i>
+              <h2 class="text-lg font-semibold text-gray-400">Mis tickets asignados</h2>
+            </div>
+            <span class="px-2 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-600">
+              {{ assignedTickets.length }} tickets
+            </span>
+          </div>
+        </div>
+      </ng-template>
+
+      <div class="space-y-3 max-h-96 overflow-y-auto">
+        @for (ticket of assignedTickets.slice(0, 5); track ticket.id) {
+        <div
+          class="group p-4 border border-gray-200 rounded-xl hover:shadow-lg transition-all duration-300 cursor-pointer hover:border-blue-200"
+          [class]="getStatusColorClass(ticket.status)" (click)="router.navigate(['/group', ticket.groupId])">
+
+          <div class="flex justify-between items-start mb-3">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-2 flex-wrap">
+                <span class="text-xs font-mono text-gray-600 bg-gray-200 px-2 py-1 rounded-md">
+                  #{{ ticket.id }}
+                </span>
+                <span class="text-xs px-2 py-1 rounded-full font-medium" [class]="getPriorityClass(ticket.priority)">
+                  {{ ticket.priority | uppercase }}
+                </span>
+              </div>
+              <h3 class="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">
+                {{ ticket.title }}
+              </h3>
+              @if (ticket.description) {
+              <p class="text-sm text-gray-600 mt-2">{{ ticket.description }}</p>
+              }
+            </div>
+          </div>
+
+          <div
+            class="flex flex-wrap justify-between items-center gap-2 text-xs text-gray-600 mt-3 pt-2 border-t border-gray-100">
+            <div class="flex items-center gap-2">
+              <i class="pi pi-folder text-gray-400"></i>
+              <span class="font-medium">Grupo {{ ticket.groupId }}</span>
+            </div>
+
+            <div class="flex items-center gap-3 flex-wrap">
+              @if (ticket.dueDate) {
+              <div class="flex items-center gap-1"
+                [class.text-red-500]="isOverdue(ticket.dueDate) && ticket.status !== 'done'">
+                <i class="pi pi-calendar text-xs"></i>
+                <span>{{ ticket.dueDate | date:'dd/MM/yyyy' }}</span>
+                @if (isOverdue(ticket.dueDate) && ticket.status !== 'done') {
+                  <i class="pi pi-ex"></i>
+                }
+              </div>
+              }
+
+              <span class="px-2 py-1 rounded-full text-xs font-medium"
+                [class]="'bg-' + getStatusColorClass(ticket.status).split(' ')[1] + ' text-' + getStatusColorClass(ticket.status).split(' ')[2].split('-')[1]">
+                {{ getStatusLabel(ticket.status) }}
+              </span>
+            </div>
+          </div>
+        </div>
+        }
+      </div>
+
+      @if (assignedTickets.length > 5) {
+      <div class="text-center py-3 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+        <p class="text-sm text-gray-600">
+          Mostrando 5 de {{ assignedTickets.length }} tickets
+          <span class="text-blue-500 cursor-pointer hover:underline ml-2">Ver todos</span>
+        </p>
+      </div>
+      }
+    </p-card>
+    } @else {
+    <p-card class="shadow-lg">
+      <ng-template pTemplate="header">
+        <div class="p-4 border-b border-gray-200">
+          <div class="flex items-center gap-2">
+            <i class="pi pi-list text-blue-500 text-xl"></i>
+            <h2 class="text-lg font-semibold text-gray-800">Mis tickets asignados</h2>
+          </div>
+        </div>
+      </ng-template>
+      <div class="text-center py-12 text-gray-400">
+        <i class="pi pi-inbox text-5xl mb-3"></i>
+        <p class="text-lg">No tienes tickets asignados</p>
+        <p class="text-sm mt-1">Cuando te asignen tickets aparecerán aquí</p>
+      </div>
+    </p-card>
+    }
+  </div>
 </div>
 
+<p-dialog header="Editar Perfil" [(visible)]="showEditDialog" [modal]="true" [style]="{ width: '550px' }"
+  [draggable]="false" [closable]="true" [styleClass]="'rounded-xl'">
+
+  <div class="space-y-5">
+    <div class="field">
+      <label for="fullName" class="block mb-2 font-medium text-gray-700">Nombre completo</label>
+      <div class="relative">
+        <i class="pi pi-user absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+        <input id="fullName" type="text" pInputText [(ngModel)]="editForm.fullName"
+          class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="email" class="block mb-2 font-medium text-gray-700">Email</label>
+      <div class="relative">
+        <i class="pi pi-envelope absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+        <input id="email" type="email" pInputText [(ngModel)]="editForm.email"
+          class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="phone" class="block mb-2 font-medium text-gray-700">Teléfono</label>
+      <div class="relative">
+        <i class="pi pi-phone absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+        <input id="phone" type="tel" pInputText [(ngModel)]="editForm.phone" placeholder="10 dígitos"
+          class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+      </div>
+      <small class="text-gray-400 mt-1 block">Ejemplo: 5512345678</small>
+    </div>
+
+    <div class="field">
+      <label for="address" class="block mb-2 font-medium text-gray-700">Dirección</label>
+      <div class="relative">
+        <i class="pi pi-map-marker absolute left-3 top-3 text-gray-400"></i>
+        <textarea id="address" pInputTextarea [(ngModel)]="editForm.address" rows="2"
+          class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="birthDate" class="block mb-2 font-medium text-gray-700">Fecha de nacimiento</label>
+      <div class="relative">
+        <i class="pi pi-calendar absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+        <input id="birthDate" type="date" pInputText [(ngModel)]="editForm.birthDate"
+          class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+      </div>
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <div class="flex justify-end gap-3 pt-2">
+      <p-button label="Cancelar" icon="pi pi-times" [outlined]="true" (click)="showEditDialog = false"
+        styleClass="px-4 py-2 rounded-lg" />
+      <p-button label="Guardar cambios" icon="pi pi-check" (click)="saveProfile()" [loading]="saving" variant="text" [raised]="true" severity="info"
+        styleClass="px-4 py-2 rounded-lg" />
+    </div>
+  </ng-template>
+</p-dialog>

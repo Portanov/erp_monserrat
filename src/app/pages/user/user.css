@@ -1,0 +1,53 @@
+.permissions-section {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color) var(--surface-border);
+}
+
+.permissions-section::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.permissions-section::-webkit-scrollbar-track {
+  background: var(--surface-border);
+  border-radius: 3px;
+}
+
+.permissions-section::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 3px;
+}
+
+.permissions-section::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-color-dark);
+}
+
+
+:host ::ng-deep .p-fieldset .p-fieldset-legend {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+:host ::ng-deep .p-fieldset.p-fieldset-toggleable .p-fieldset-legend a {
+  color: var(--text-color);
+}
+
+:host ::ng-deep .p-fieldset .p-fieldset-content {
+  padding: 1rem;
+}
+
+:host ::ng-deep .p-toggleswitch {
+  width: 2.5rem;
+  height: 1.5rem;
+}
+
+:host ::ng-deep .p-toggleswitch .p-toggleswitch-slider {
+  border-radius: 1rem;
+}
+
+:host ::ng-deep .p-toggleswitch.p-focus .p-toggleswitch-slider {
+  box-shadow: 0 0 0 2px var(--primary-color-light);
+}

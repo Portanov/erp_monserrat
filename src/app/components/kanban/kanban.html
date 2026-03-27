@@ -1,0 +1,104 @@
+<div class="grid grid-cols-5 gap-4 p-4">
+  @for (config of statusConfig; track config.status) {
+  <div class="col-span-1">
+    <div pDroppable (onDrop)="onDrop(config.status)" (onDragOver)="onDragOver($event)" class="h-full">
+      <p-panel [class]="'border ' + config.border + ' rounded-none h-full'" [style]="{'min-height': '500px'}">
+
+        <ng-template pTemplate="header">
+          <div class="flex items-center justify-between w-full">
+            <div class="flex items-center gap-2">
+              <i [class]="'pi ' + config.icon" [class]="'text-' + config.color + '-600'"></i>
+              <h1 class="text-center text-lg font-semibold" [class]="config.text">
+                {{ config.label }}
+              </h1>
+            </div>
+            <span class="bg-gray-800 text-white rounded-full px-2 py-1 text-xs">
+              {{ ticketsByStatus[config.status].length }}
+            </span>
+          </div>
+        </ng-template>
+
+        <div class="tickets-container space-y-3 min-h-[300px] max-h-[500px] overflow-y-auto p-1">
+          @for (ticket of ticketsByStatus[config.status]; track trackByTicketId($index, ticket)) {
+          <div pDraggable (onDragStart)="dragStart(ticket)" (onDragEnd)="dragEnd()" draggable="true"
+            [class.cursor-move]="canMoveTicket(ticket)" [class.cursor-not-allowed]="!canMoveTicket(ticket)"
+            class="transition-opacity">
+
+            <p-card
+              [class]="'border-l-4 border-' + getStatusColor(ticket.status) + '-500 border-e border-t border-b bg-zinc-800 hover:shadow-lg transition-shadow'"
+              [style]="{'margin-bottom': '0.5rem'}">
+
+              <ng-template pTemplate="header">
+                <div class="flex justify-between items-center p-3 pb-0">
+                  <span class="text-xs font-mono text-gray-500">{{ ticket.id }}</span>
+                  <span class="text-xs px-2 py-1 rounded-full" [class]="getPriorityClass(ticket.priority)">
+                    {{ ticket.priority | uppercase }}
+                  </span>
+                </div>
+              </ng-template>
+
+              <div class="p-3 pt-0">
+                <h3 class="font-semibold text-sm mb-2">{{ ticket.title }}</h3>
+
+                @if (ticket.description) {
+                <p class="text-xs text-gray-600 mb-3 line-clamp-2">{{ ticket.description }}</p>
+                }
+
+                <div class="flex justify-between items-center text-xs text-gray-500">
+                  <div class="flex items-center gap-1">
+                    <i class="pi pi-user"></i>
+                    <span>{{ getUserName(ticket.assignedToId) }}</span>
+                  </div>
+
+                  @if (ticket.dueDate) {
+                  <div class="flex items-center gap-1" [class.text-red-500]="isOverdue(ticket.dueDate)">
+                    <i class="pi pi-calendar"></i>
+                    <span>{{ ticket.dueDate | date:'dd/MM' }}</span>
+                  </div>
+                  }
+                </div>
+
+                <div class="mt-3 flex justify-end gap-2 border-t border-gray-700 pt-2">
+                  @if (canViewComments(ticket)) {
+                  <button pButton type="button" class="p-button-rounded p-button-text p-button-sm"
+                    [class]="ticket.comments.length > 0 ? 'text-blue-400' : 'text-gray-500'"
+                    (click)="openCommentDialog(ticket)">
+                    <i class="pi pi-comment"></i>
+                    @if (ticket.comments.length > 0) {
+                    <span class="ml-1 text-xs">{{ ticket.comments.length }}</span>
+                    }
+                  </button>
+                  }
+
+                  @if (canEditTicket(ticket)) {
+                  <button pButton type="button" class="p-button-rounded p-button-text p-button-sm text-yellow-400"
+                    (click)="openEditTicket(ticket)">
+                    <i class="pi pi-pencil"></i>
+                  </button>
+                  }
+                </div>
+              </div>
+            </p-card>
+          </div>
+          } @empty {
+          <div class="flex flex-col items-center justify-center h-32 text-gray-400">
+            <i class="pi pi-inbox text-2xl mb-2"></i>
+            <p class="text-sm">No hay tickets</p>
+          </div>
+          }
+        </div>
+      </p-panel>
+    </div>
+  </div>
+  }
+</div>
+
+@if (selectedTicket) {
+<app-ticket-dialog [(visible)]="showTicketDialog" [ticketId]="selectedTicket.id" [groupId]="groupId"
+  (saved)="onTicketSaved($event)">
+</app-ticket-dialog>
+
+<app-comment-dialog [(visible)]="showCommentDialog" [ticketId]="selectedTicket.id"
+  (commentAdded)="onCommentAdded($event)">
+</app-comment-dialog>
+}
