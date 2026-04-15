@@ -13,7 +13,7 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { AvatarModule } from 'primeng/avatar';
 import { TicketsService, Ticket, Priority, TicketStatus } from '../../services/tickets/tickets.service';
 import { UserService } from '../../services/user/user.service';
-import { UserData } from '../../services/user/user.service';
+import { User } from '../../models/user/user.model';
 
 interface FilterOption {
   label: string;
@@ -53,7 +53,7 @@ export class TicketDialogComponent implements OnInit, OnChanges {
   saving: boolean = false;
   submitted: boolean = false;
 
-  users: UserData[] = [];
+  users: User[] = [];
 
   priorityOptions: FilterOption[] = [
     { label: 'Alta', value: 'alta' },
@@ -82,8 +82,8 @@ export class TicketDialogComponent implements OnInit, OnChanges {
     dueDate: null
   };
 
-  ngOnInit() {
-    this.loadUsers();
+  async ngOnInit() {
+    await this.loadUsers();
   }
 
   ngOnChanges() {
@@ -94,8 +94,8 @@ export class TicketDialogComponent implements OnInit, OnChanges {
     }
   }
 
-  loadUsers() {
-    this.users = this.userService.getAll();
+  async loadUsers() {
+    this.users = await this.userService.getAll();
   }
 
   loadTicket() {

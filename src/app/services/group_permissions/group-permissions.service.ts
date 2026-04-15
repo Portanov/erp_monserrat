@@ -58,7 +58,7 @@ export class GroupPermissionService {
   private groupService = inject(GroupService);
 
   private groupPermissions = signal<UserGroupPermissions>({
-    1: { // Usuario admin
+    7: { // Usuario admin
       '1': {
         createTicket: true,
         editTicket: true,
@@ -99,7 +99,7 @@ export class GroupPermissionService {
         manageGroupPrivileges: true
       }
     },
-    2: { // Usuario normal
+    13: { // Usuario normal
       '1': {
         createTicket: true,
         editTicket: true,

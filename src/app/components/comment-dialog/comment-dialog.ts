@@ -1,3 +1,4 @@
+// comment-dialog.ts
 import { Component, Input, Output, EventEmitter, inject, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -10,7 +11,7 @@ import { AvatarModule } from 'primeng/avatar';
 import { TooltipModule } from 'primeng/tooltip';
 import { TicketsService, Ticket, Comment } from '../../services/tickets/tickets.service';
 import { UserService } from '../../services/user/user.service';
-import { UserData } from '../../services/user/user.service';
+import { User } from '../../models/user/user.model';
 import { BadgeModule } from 'primeng/badge';
 import { CardModule } from 'primeng/card';
 import { ScrollPanelModule } from 'primeng/scrollpanel';
@@ -52,6 +53,9 @@ export class CommentDialogComponent implements OnInit, OnChanges {
   comments: Comment[] = [];
   newComment: string = '';
 
+  usersMap: Map<number, User> = new Map();
+  commentsWithUsers: { comment: Comment; user: User | null }[] = [];
+
   ngOnInit() {
     // Inicialización
   }
@@ -70,23 +74,42 @@ export class CommentDialogComponent implements OnInit, OnChanges {
     }
   }
 
-  loadTicketAndComments() {
+  async loadTicketAndComments() {
     if (!this.ticketId) return;
 
     this.loading = true;
 
-    setTimeout(() => {
+    setTimeout(async () => {
       this.ticket = this.ticketsService.getTicketById(this.ticketId!) || null;
       if (this.ticket) {
         this.comments = [...this.ticket.comments].sort((a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
+        await this.loadUsersForComments();
       }
       this.loading = false;
     }, 300);
   }
 
-  save() {
+  private async loadUsersForComments() {
+    const userIds = [...new Set(this.comments.map(c => c.userId))];
+
+    for (const userId of userIds) {
+      if (!this.usersMap.has(userId)) {
+        const user = await this.userService.getById(userId);
+        if (user) {
+          this.usersMap.set(userId, user);
+        }
+      }
+    }
+
+    this.commentsWithUsers = this.comments.map(comment => ({
+      comment,
+      user: this.usersMap.get(comment.userId) || null
+    }));
+  }
+
+  async save() {
     this.submitted = true;
 
     if (!this.newComment?.trim() || !this.ticketId) {
@@ -95,14 +118,26 @@ export class CommentDialogComponent implements OnInit, OnChanges {
 
     this.saving = true;
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         const newComment = this.ticketsService.addComment(this.ticketId!, this.newComment.trim());
+
+        if (!this.usersMap.has(newComment.userId)) {
+          const user = await this.userService.getById(newComment.userId);
+          if (user) {
+            this.usersMap.set(newComment.userId, user);
+          }
+        }
+
+        this.commentsWithUsers = [
+          { comment: newComment, user: this.usersMap.get(newComment.userId) || null },
+          ...this.commentsWithUsers
+        ];
+
         this.comments = [newComment, ...this.comments];
         this.newComment = '';
         this.submitted = false;
         this.commentAdded.emit(newComment);
-        this.loadTicketAndComments();
       } catch (error) {
         console.error('Error al agregar comentario:', error);
       } finally {
@@ -111,9 +146,10 @@ export class CommentDialogComponent implements OnInit, OnChanges {
     }, 300);
   }
 
-  getUserById(userId: number): UserData | undefined {
-    return this.userService.getById(userId);
-  }
+  // 🔥 ELIMINAR este método ya no lo necesitas
+  // async getUserById(userId: number): Promise<User | null> {
+  //   return await this.userService.getById(userId);
+  // }
 
   close() {
     this.visible = false;
@@ -130,5 +166,7 @@ export class CommentDialogComponent implements OnInit, OnChanges {
     this.submitted = false;
     this.ticket = null;
     this.comments = [];
+    this.commentsWithUsers = [];
+    this.usersMap.clear();
   }
 }

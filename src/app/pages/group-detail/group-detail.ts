@@ -17,6 +17,7 @@ import { TicketDialogComponent } from '../../components/ticket-dialog/ticket-dia
 import { DataViewModule } from 'primeng/dataview';
 import { HasGroupPermissionDirective } from '../../directives/permissions-group/has-group-permission.directive';
 import { GroupConfigComponent } from '../../components/group-config/group-config.component';
+import { User } from '../../models/user/user.model';
 
 @Component({
   selector: 'app-group-detail',
@@ -49,6 +50,8 @@ export class GroupDetail implements OnInit {
   private groupService = inject(GroupService);
   private userService = inject(UserService);
 
+  private usersCache: Map<number, User> = new Map();
+  private loadingUsers: Set<number> = new Set();
   groupId: number = 0;
   groupInfo: any = null;
   tickets = signal<Ticket[]>([]);
@@ -60,6 +63,7 @@ export class GroupDetail implements OnInit {
   selectedTicketId: string | null = null;
   currentUser = this.userService.currentUser;
   currentUserId = computed(() => this.currentUser()?.id);
+  
 
   ticketStats = {
     pending: 0,
@@ -89,21 +93,54 @@ export class GroupDetail implements OnInit {
     });
   }
 
-  private loadGroupInfo() {
+  private async loadGroupInfo() {
     const groups = this.groupService.getAll();
     this.groupInfo = groups.find(g => g.id === this.groupId);
+
+    if (this.groupInfo?.authorId) {
+      await this.ensureUserLoaded(this.groupInfo.authorId);
+    }
   }
 
-  private loadTickets() {
+  private async loadTickets() {
     this.loading.set(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       const groupTickets = this.ticketsService.getTicketsByGroup(this.groupId!);
       console.log('Tickets cargados en group-detail:', groupTickets.length);
       this.tickets.set(groupTickets);
+      await this.loadUsersFromTickets(groupTickets);
+
       this.calculateStats();
       this.loadRecentTickets();
       this.loading.set(false);
     }, 500);
+  }
+
+  private async loadUsersFromTickets(tickets: Ticket[]) {
+    const userIds = new Set<number>();
+    tickets.forEach(ticket => {
+      if (ticket.assignedToId) userIds.add(ticket.assignedToId);
+    });
+
+    for (const userId of userIds) {
+      await this.ensureUserLoaded(userId);
+    }
+  }
+
+  private async ensureUserLoaded(userId: number): Promise<void> {
+    if (this.usersCache.has(userId) || this.loadingUsers.has(userId)) return;
+
+    this.loadingUsers.add(userId);
+    try {
+      const user = await this.userService.getById(userId);
+      if (user) {
+        this.usersCache.set(userId, user);
+      }
+    } catch (error) {
+      console.error(`Error loading user ${userId}:`, error);
+    } finally {
+      this.loadingUsers.delete(userId);
+    }
   }
 
   private calculateStats() {
@@ -178,7 +215,7 @@ export class GroupDetail implements OnInit {
 
   getUserName(userId: number | null): string {
     if (!userId) return 'Sin asignar';
-    const user = this.userService.getAll().find(u => u.id === userId);
+    const user = this.usersCache.get(userId);
     return user ? user.username : 'Desconocido';
   }
 

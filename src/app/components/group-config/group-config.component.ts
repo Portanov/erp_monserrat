@@ -1,5 +1,3 @@
-// group-config.component.ts (solo las partes modificadas)
-
 import { Component, Input, OnInit, inject, signal, computed, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -14,13 +12,15 @@ import { FieldsetModule } from 'primeng/fieldset';
 import { TooltipModule } from 'primeng/tooltip';
 import { ToastModule } from 'primeng/toast';
 import { SelectModule } from 'primeng/select';
-import { MenuItem, MessageService } from 'primeng/api';
+import { MenuItem} from 'primeng/api';
 import { GroupService, GroupData } from '../../services/group/group.service';
-import { UserService, UserData } from '../../services/user/user.service';
+import { UserService } from '../../services/user/user.service';
+import { User } from '../../models/user/user.model';
 import { GroupPermissionService, GroupPermissions } from './../../services/group_permissions/group-permissions.service';
 import { HasGroupPermissionDirective } from '../../directives/permissions-group/has-group-permission.directive';
 import { IconField, IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
+import { AlertService } from '../../services/alerts/alert.service';
 
 @Component({
   selector: 'app-group-config',
@@ -43,7 +43,6 @@ import { InputIconModule } from 'primeng/inputicon';
     IconField,
     InputIconModule
   ],
-  providers: [MessageService],
   template: `
     <div class="group-config">
       <!-- Header con título y búsqueda -->
@@ -416,33 +415,29 @@ export class GroupConfigComponent implements OnInit {
   private groupService = inject(GroupService);
   private userService = inject(UserService);
   private groupPermissionService = inject(GroupPermissionService);
-  private messageService = inject(MessageService);
+  private alertService = inject(AlertService);
+  private loadingPromises: Map<number, Promise<User | null>> = new Map();
 
   @ViewChild('menu') menu: any;
   @ViewChild('dt') dt: any;
 
-  // Estados
   searchTerm = signal('');
   globalFilterValue: string = '';
-  members = signal<UserData[]>([]);
+  members = signal<User[]>([]);
   memberPermissionsMap = new Map<number, GroupPermissions>();
 
-  // Diálogos
   showAddMemberDialog = false;
   showPermissionsDialog = false;
   newMemberEmail = '';
   newMemberRole = 'member';
 
-  // Miembro seleccionado
-  selectedMember: UserData | null = null;
+  selectedMember: User | null = null;
   selectedMemberId: number | null = null;
   memberPermissions: GroupPermissions = this.getEmptyPermissions();
 
-  // Menú items actuales
   currentMenuItems: MenuItem[] = [];
-  private currentMember: UserData | null = null;
+  private currentMember: User | null = null;
 
-  // Opciones de roles
   roleOptions = [
     { label: 'Administrador', value: 'admin' },
     { label: 'Moderador', value: 'moderator' },
@@ -454,39 +449,51 @@ export class GroupConfigComponent implements OnInit {
     this.loadMembers();
   }
 
-  private loadMembers() {
+  private async loadMembers() {
     const group = this.groupService.getAll().find(g => g.id === this.groupId);
     if (group) {
-      const membersList = group.members
-        .map(memberId => this.userService.getById(memberId))
-        .filter(user => user !== undefined) as UserData[];
+      const membersList = await Promise.all(
+        group.members.map(memberId => this.getUserWithCache(memberId))
+      );
+      const validMembers = membersList.filter(user => user !== null) as User[];
+      this.members.set(validMembers);
 
-      this.members.set(membersList);
-
-      // Cargar permisos de cada miembro
-      membersList.forEach(member => {
+      for (const member of validMembers) {
         const permissions = this.groupPermissionService.getUserGroupPermissions(member.id, this.groupId);
         if (permissions) {
           this.memberPermissionsMap.set(member.id, permissions);
         }
-      });
+      }
     }
   }
 
-  // Método para búsqueda global
+  private async getUserWithCache(userId: number): Promise<User | null> {
+    if (this.loadingPromises.has(userId)) {
+      return this.loadingPromises.get(userId)!;
+    }
+
+    const promise = this.userService.getById(userId);
+    this.loadingPromises.set(userId, promise);
+
+    try {
+      const user = await promise;
+      return user;
+    } finally {
+      this.loadingPromises.delete(userId);
+    }
+  }
+
   onGlobalFilter(table: any, event: Event) {
     const input = event.target as HTMLInputElement;
     this.globalFilterValue = input.value;
     table.filterGlobal(this.globalFilterValue, 'contains');
   }
 
-  // Método para limpiar el filtro
   clearFilter(table: any) {
     this.globalFilterValue = '';
     table.filterGlobal('', 'contains');
   }
 
-  // Resto de métodos igual... (getEmptyPermissions, getInitials, getMemberRole, etc.)
   private getEmptyPermissions(): GroupPermissions {
     return {
       createTicket: false,
@@ -533,13 +540,13 @@ export class GroupConfigComponent implements OnInit {
     return classes[role as keyof typeof classes] || 'bg-gray-500 text-white';
   }
 
-  isOwnerOrSelf(member: UserData): boolean {
+  isOwnerOrSelf(member: User): boolean {
     const isOwner = this.groupInfo?.authorId === member.id;
     const isCurrentUser = this.userService.currentUser()?.id === member.id;
     return isOwner || isCurrentUser;
   }
 
-  openMenu(event: any, member: UserData) {
+  openMenu(event: any, member: User) {
     if (!this.isOwnerOrSelf(member)) {
       this.currentMember = member;
       this.currentMenuItems = [];
@@ -573,7 +580,7 @@ export class GroupConfigComponent implements OnInit {
     }
   }
 
-  openPermissionsDialog(member: UserData) {
+  openPermissionsDialog(member: User) {
     this.selectedMember = member;
     this.selectedMemberId = member.id;
 
@@ -603,12 +610,10 @@ export class GroupConfigComponent implements OnInit {
 
       this.memberPermissionsMap.set(this.selectedMemberId, { ...this.memberPermissions });
 
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Éxito',
-        detail: 'Permisos actualizados correctamente',
-        life: 3000
-      });
+      this.alertService.success(
+        'Éxito',
+        'Permisos actualizados correctamente',
+      );
 
       this.closePermissionsDialog();
       this.loadMembers();
@@ -625,22 +630,29 @@ export class GroupConfigComponent implements OnInit {
     this.showAddMemberDialog = false;
   }
 
-  addMember() {
+  async addMember() {
     if (!this.newMemberEmail) {
-      this.messageService.add({
-        severity: 'error',
-        summary: 'Error',
-        detail: 'Debe ingresar un email',
-        life: 3000
-      });
+      this.alertService.error(
+        'Error',
+        'Debe ingresar un email',
+      );
       return;
     }
 
-    const success = this.groupService.addMember(this.groupId, this.newMemberEmail);
+    try {
+      const user = await this.userService.getByEmail(this.newMemberEmail);
 
-    if (success) {
-      const user = this.userService.getByEmail(this.newMemberEmail);
-      if (user) {
+      if (!user) {
+        this.alertService.error(
+          'Error',
+          'Usuario no encontrado');
+        return;
+      }
+
+      const success = await this.groupService.addMember(this.groupId, this.newMemberEmail);
+
+      if (success) {
+        // 🔥 El usuario ya lo tenemos, no necesitamos cargarlo de nuevo
         let permissions: Partial<GroupPermissions> = {};
 
         switch (this.newMemberRole) {
@@ -677,30 +689,27 @@ export class GroupConfigComponent implements OnInit {
         permissions.viewTicket = true;
         permissions.viewMembers = true;
 
-        this.groupPermissionService.assignGroupPermissions(user.id, this.groupId, permissions);
+        await this.groupPermissionService.assignGroupPermissions(user.id, this.groupId, permissions);
+
         this.memberPermissionsMap.set(user.id, { ...this.getEmptyPermissions(), ...permissions });
+
+        await this.loadMembers();
+
+        this.alertService.success(
+          'Éxito',
+          'Miembro añadido correctamente');
+
+        this.closeAddMemberDialog();
+      } else {
+        this.alertService.error('Error','No se pudo añadir el miembro');
       }
-
-      this.loadMembers();
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Éxito',
-        detail: 'Miembro añadido correctamente',
-        life: 3000
-      });
-
-      this.closeAddMemberDialog();
-    } else {
-      this.messageService.add({
-        severity: 'error',
-        summary: 'Error',
-        detail: 'No se pudo añadir el miembro. Verifique el email',
-        life: 3000
-      });
+    } catch (error) {
+      console.error('Error adding member:', error);
+      this.alertService.error('Error','Ocurrió un error al añadir el miembro');
     }
   }
 
-  removeMember(member: UserData) {
+  removeMember(member: User) {
     const success = this.groupService.removeMember(this.groupId, member.id);
 
     if (success) {
@@ -708,12 +717,7 @@ export class GroupConfigComponent implements OnInit {
       this.memberPermissionsMap.delete(member.id);
       this.loadMembers();
 
-      this.messageService.add({
-        severity: 'info',
-        summary: 'Miembro expulsado',
-        detail: `${member.fullName} ha sido expulsado del grupo`,
-        life: 3000
-      });
+      this.alertService.info('Miembro expulsado', `${member.fullName} ha sido expulsado del grupo`);
     }
   }
 

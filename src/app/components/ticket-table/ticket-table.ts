@@ -12,6 +12,7 @@ import { SelectModule } from 'primeng/select';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { UserService } from '../../services/user/user.service';
+import { User } from '../../models/user/user.model';
 import { TicketDialogComponent } from '../ticket-dialog/ticket-dialog';
 import { CommentDialogComponent } from '../comment-dialog/comment-dialog';
 import { AlertService } from '../../services/alerts/alert.service';
@@ -58,10 +59,21 @@ export class TicketTable {
 
   tickets: Ticket[] = [];
   loading: boolean = true;
-  usuario = this.userService.currentUser();
+
+  
+  get usuario(): User | null {
+    return this.userService.currentUser();
+  }
+
   showTicketDialog: boolean = false;
   showCommentDialog: boolean = false;
   selectedTicketId: string | null = null;
+
+  
+  usersCache: Map<number, User> = new Map();
+
+  
+  loadingUsers: Set<number> = new Set();
 
   statusOptions: FilterOption[] = [
     { label: 'Pendiente', value: 'pending' },
@@ -105,8 +117,65 @@ export class TicketTable {
     setTimeout(() => {
       this.tickets = this.ticketsService.getTicketsByGroup(this.groupId!);
       console.log('Tickets cargados en tabla:', this.tickets.length);
+
+      
+      this.loadUsersFromTickets();
+
       this.loading = false;
     }, 300);
+  }
+
+  
+  private async loadUsersFromTickets() {
+    
+    const userIds = new Set<number>();
+
+    this.tickets.forEach(ticket => {
+      if (ticket.assignedToId) userIds.add(ticket.assignedToId);
+      if (ticket.createdById) userIds.add(ticket.createdById);
+    });
+
+    
+    for (const userId of userIds) {
+      if (!this.usersCache.has(userId) && !this.loadingUsers.has(userId)) {
+        this.loadingUsers.add(userId);
+        try {
+          const user = await this.userService.getById(userId);
+          if (user) {
+            this.usersCache.set(userId, user);
+          }
+        } catch (error) {
+          console.error(`Error loading user ${userId}:`, error);
+        } finally {
+          this.loadingUsers.delete(userId);
+        }
+      }
+    }
+  }
+
+  
+  getUserById(userId: number | null): User | null {
+    if (!userId) return null;
+    return this.usersCache.get(userId) || null;
+  }
+
+  
+  private async ensureUserLoaded(userId: number): Promise<void> {
+    if (!this.usersCache.has(userId) && !this.loadingUsers.has(userId)) {
+      this.loadingUsers.add(userId);
+      try {
+        const user = await this.userService.getById(userId);
+        if (user) {
+          this.usersCache.set(userId, user);
+          
+          this.loadTickets();
+        }
+      } catch (error) {
+        console.error(`Error loading user ${userId}:`, error);
+      } finally {
+        this.loadingUsers.delete(userId);
+      }
+    }
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -165,11 +234,6 @@ export class TicketTable {
 
   getPrioritySeverity(priority: string): string {
     return this.ticketsService.getPrioritySeverity(priority as any);
-  }
-
-  getUserById(userId: number | null) {
-    if (!userId) return null;
-    return this.ticketsService.getUserById(userId);
   }
 
   isOverdue(ticket: Ticket): boolean {

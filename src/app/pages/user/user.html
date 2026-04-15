@@ -13,7 +13,7 @@
               <div class="grid grid-cols-2 gap-4">
                 <div>
                   <label>Username</label>
-                  <input pInputText [(ngModel)]="newUser.username" class="w-full" required [readonly]="isEditing" />
+                  <input pInputText [(ngModel)]="newUser.username" class="w-full" required [readonly]="isEditing" [disabled]="isEditing" />
                 </div>
                 <div>
                   <label>Email</label>
@@ -26,11 +26,6 @@
                 <div>
                   <label>Password</label>
                   <p-password [(ngModel)]="newUser.password" class="w-full" required fluid />
-                </div>
-                <div>
-                  <label>Role</label>
-                  <p-select [options]="roles" [(ngModel)]="newUser.role" optionLabel="label" optionValue="value"
-                    class="w-full" />
                 </div>
                 <div>
                   <label>Phone</label>
@@ -105,7 +100,6 @@
             <th style="width:15%">Username</th>
             <th style="width:20%">Email</th>
             <th style="width:20%">Full Name</th>
-            <th style="width:15%">Role</th>
             <th style="width:15%">Status</th>
             <th style="width:15%">Acciones</th>
           </tr>
@@ -115,7 +109,6 @@
             <td>{{ user.username }}</td>
             <td>{{ user.email }}</td>
             <td>{{ user.fullName }}</td>
-            <td>{{ user.role }}</td>
             <td>
               <div class="" *appHasPermission="'users.editState'">
                 <div [pEditableColumn]="user.status" (onEditComplete)="onStatusEditComplete($event, user)">

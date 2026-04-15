@@ -8,7 +8,8 @@ import { InputTextModule } from 'primeng/inputtext';
 import { TextareaModule } from 'primeng/textarea';
 import { DatePickerModule } from 'primeng/datepicker';
 import { FormsModule } from '@angular/forms';
-import { UserService, UserData } from '../../services/user/user.service';
+import { UserService } from '../../services/user/user.service';
+import { User } from '../../models/user/user.model';
 import { TicketsService, Ticket, TicketStatus } from '../../services/tickets/tickets.service';
 import { AlertService } from '../../services/alerts/alert.service';
 import { Router } from '@angular/router';
@@ -39,11 +40,11 @@ export class Profile implements OnInit {
   private alertService = inject(AlertService);
   public router = inject(Router);
 
-  user: UserData | null = null;
+  user: User | null = null;
   showEditDialog: boolean = false;
   saving: boolean = false;
 
-  // Estadísticas de tickets
+  
   createdTickets: Ticket[] = [];
   assignedTickets: Ticket[] = [];
 
@@ -57,7 +58,7 @@ export class Profile implements OnInit {
     }
   };
 
-  // Formulario de edición
+  
   editForm = {
     fullName: '',
     email: '',
@@ -66,27 +67,36 @@ export class Profile implements OnInit {
     birthDate: null as Date | null
   };
 
+  
+  usersCache: Map<number, User> = new Map();
+
   ngOnInit() {
     this.loadUserData();
     this.loadTicketStats();
   }
 
+  
   loadUserData() {
     this.user = this.userService.getCurrentUser();
     if (this.user) {
       this.editForm = {
         fullName: this.user.fullName,
         email: this.user.email,
-        phone: this.user.phone,
-        address: this.user.address,
+        phone: this.user.phone || '',
+        address: this.user.address || '',
         birthDate: this.user.birthDate ? new Date(this.user.birthDate) : null
       };
     }
   }
 
+  
   loadTicketStats() {
-    if (!this.user) return;
+    if (!this.user) {
+      console.log('No hay usuario para cargar estadísticas');
+      return;
+    }
 
+    
     this.createdTickets = this.ticketsService.getCreatedTickets(this.user.id);
     this.assignedTickets = this.ticketsService.getAssignedTickets(this.user.id);
 
@@ -104,55 +114,68 @@ export class Profile implements OnInit {
     this.showEditDialog = true;
   }
 
-  saveProfile() {
-    if (!this.user) {
+  async saveProfile() {
+    const currentUser = this.userService.getCurrentUser();
+    if (!currentUser) {
       this.alertService.error('Error', 'No se encontró el usuario');
       return;
     }
 
     this.saving = true;
 
-    setTimeout(() => {
-      try {
-        const currentUser = this.user;
-        if (!currentUser) {
-          throw new Error('Usuario no encontrado');
-        }
+    try {
+      const updatedUser: User = {
+        id: currentUser.id,
+        username: currentUser.username,
+        email: this.editForm.email,
+        fullName: this.editForm.fullName,
+        phone: this.editForm.phone,
+        address: this.editForm.address,
+        birthDate: this.editForm.birthDate?.toISOString() || '',
+        status: currentUser.status,
+        created_at: currentUser.created_at || new Date().toISOString()
+      };
 
-        const updatedUser: UserData = {
-          id: currentUser.id,
-          username: currentUser.username,
-          email: this.editForm.email,
-          fullName: this.editForm.fullName,
-          password: currentUser.password,
-          phone: this.editForm.phone,
-          address: this.editForm.address,
-          birthDate: this.editForm.birthDate,
-          registeredDate: currentUser.registeredDate,
-          role: currentUser.role,
-          status: currentUser.status
-        };
+      const updated = await this.userService.update(currentUser.id, updatedUser);
 
-        const updated = this.userService.update(updatedUser);
-
-        if (updated) {
-          this.user = updated;
-          this.alertService.success('Perfil actualizado', 'Tus datos han sido actualizados correctamente');
-          this.showEditDialog = false;
-        } else {
-          this.alertService.error('Error', 'No se pudo actualizar el perfil');
-        }
-      } catch (error) {
-        console.error('Error al actualizar perfil:', error);
-        this.alertService.error('Error', 'Ha ocurrido un error al actualizar el perfil');
-      } finally {
-        this.saving = false;
+      if (updated) {
+        this.userService.setCurrentUser(updated);
+        
+        this.user = updated;
+        this.alertService.success('Perfil actualizado', 'Tus datos han sido actualizados correctamente');
+        this.showEditDialog = false;
+        this.loadUserData(); 
+      } else {
+        this.alertService.error('Error', 'No se pudo actualizar el perfil');
       }
-    }, 500);
+    } catch (error) {
+      console.error('Error al actualizar perfil:', error);
+      this.alertService.error('Error', 'Ha ocurrido un error al actualizar el perfil');
+    } finally {
+      this.saving = false;
+    }
   }
 
   logout() {
     this.userService.logout();
+  }
+
+  
+  async loadUserForTicket(userId: number): Promise<User | null> {
+    if (this.usersCache.has(userId)) {
+      return this.usersCache.get(userId) || null;
+    }
+
+    try {
+      const user = await this.userService.getById(userId);
+      if (user) {
+        this.usersCache.set(userId, user);
+      }
+      return user;
+    } catch (error) {
+      console.error(`Error loading user ${userId}:`, error);
+      return null;
+    }
   }
 
   getStatusColorClass(status: TicketStatus): string {
@@ -187,10 +210,22 @@ export class Profile implements OnInit {
     return this.ticketsService.getStatusSeverityColors(status);
   }
 
-  getUserName(userId: number | null): string {
+  
+  
+  async getUserName(userId: number | null): Promise<string> {
     if (!userId) return 'Sin asignar';
-    const user = this.ticketsService.getUserById(userId);
-    return user?.fullName || 'Usuario';
+
+    if (this.usersCache.has(userId)) {
+      return this.usersCache.get(userId)?.fullName || 'Usuario';
+    }
+
+    const user = await this.userService.getById(userId);
+    if (user) {
+      this.usersCache.set(userId, user);
+      return user.fullName || user.username || 'Usuario';
+    }
+
+    return 'Usuario';
   }
 
   isOverdue(dueDate: Date | null): boolean {

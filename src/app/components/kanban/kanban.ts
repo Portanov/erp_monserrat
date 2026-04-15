@@ -7,6 +7,7 @@ import { BadgeModule } from 'primeng/badge';
 import { TicketsService, Ticket, TicketStatus } from '../../services/tickets/tickets.service';
 import { AlertService } from '../../services/alerts/alert.service';
 import { UserService } from '../../services/user/user.service';
+import { User } from '../../models/user/user.model';
 import { TicketDialogComponent } from '../ticket-dialog/ticket-dialog';
 import { CommentDialogComponent } from '../comment-dialog/comment-dialog';
 
@@ -34,10 +35,13 @@ export class Kanban implements OnInit, OnChanges {
   @Output() ticketMoved = new EventEmitter<void>();
 
   draggedTicket: Ticket | null = null;
-  currentUser: any = null;
+  currentUser: User | null = null;
   showTicketDialog: boolean = false;
   showCommentDialog: boolean = false;
   selectedTicket: Ticket | null = null;
+
+  usersCache: Map<number, User> = new Map();
+  loadingUsers: Set<number> = new Set();
 
   ticketsByStatus: Record<TicketStatus, Ticket[]> = {
     'pending': [],
@@ -86,12 +90,64 @@ export class Kanban implements OnInit, OnChanges {
       tickets = this.ticketsService.currentGroupTickets();
       console.log('Cargando todos los tickets del grupo actual:', tickets.length);
     }
+
     tickets.forEach(ticket => {
       if (this.ticketsByStatus[ticket.status]) {
         this.ticketsByStatus[ticket.status].push(ticket);
       }
     });
+
     this.sortTicketsByPriority();
+    this.loadUsersFromTickets();
+  }
+
+  private async loadUsersFromTickets() {
+    const userIds = new Set<number>();
+
+    Object.values(this.ticketsByStatus).forEach(tickets => {
+      tickets.forEach(ticket => {
+        if (ticket.assignedToId) userIds.add(ticket.assignedToId);
+        if (ticket.createdById) userIds.add(ticket.createdById);
+      });
+    });
+    for (const userId of userIds) {
+      if (!this.usersCache.has(userId) && !this.loadingUsers.has(userId)) {
+        this.loadingUsers.add(userId);
+        try {
+          const user = await this.userService.getById(userId);
+          if (user) {
+            this.usersCache.set(userId, user);
+          }
+        } catch (error) {
+          console.error(`Error loading user ${userId}:`, error);
+        } finally {
+          this.loadingUsers.delete(userId);
+        }
+      }
+    }
+  }
+
+  getUserName(userId: number | null): string {
+    if (!userId) return 'Sin asignar';
+
+    const user = this.usersCache.get(userId);
+
+    if (user) {
+      return user.fullName || user.username || 'Usuario';
+    }
+
+    if (!this.loadingUsers.has(userId)) {
+      this.userService.getById(userId).then(user => {
+        if (user) {
+          this.usersCache.set(userId, user);
+          this.loadTickets();
+        }
+      }).catch(error => {
+        console.error(`Error loading user ${userId}:`, error);
+      });
+    }
+
+    return 'Cargando...';
   }
 
   private sortTicketsByPriority() {
@@ -202,12 +258,6 @@ export class Kanban implements OnInit, OnChanges {
 
   getPrioritySeverity(priority: string): string {
     return this.ticketsService.getPrioritySeverity(priority as any);
-  }
-
-  getUserName(userId: number | null): string {
-    if (!userId) return 'Sin asignar';
-    const user = this.ticketsService.getUserById(userId);
-    return user?.username || 'Usuario';
   }
 
   isOverdue(dueDate: Date | null): boolean {

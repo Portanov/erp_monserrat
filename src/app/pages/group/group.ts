@@ -9,6 +9,7 @@ import { MenuItem } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { GroupService, GroupData } from '../../services/group/group.service';
 import { UserService } from '../../services/user/user.service';
+import { User } from '../../models/user/user.model';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { FormsModule } from '@angular/forms';
@@ -38,7 +39,6 @@ interface level {
   templateUrl: './group.html',
   styleUrl: './group.css',
 })
-
 export class Group implements OnInit {
   private router = inject(Router);
   private permissionService = inject(PermissionService);
@@ -49,7 +49,11 @@ export class Group implements OnInit {
   editingGroupId: number | null = null;
   levels: level[] = [];
   selectedlevel: level | null = null;
-  userid: number | null=null;
+  userid: number | null = null;
+
+  
+  usersMap: Map<number, User> = new Map();
+  loadingUsers: boolean = false;
 
   newGroup: Omit<GroupData, 'id' | 'authorId'> = {
     name: '',
@@ -82,7 +86,6 @@ export class Group implements OnInit {
         command: () => this.openCreateDialog()
       });
     }
-
     this.items = menuItems;
   }
 
@@ -90,9 +93,39 @@ export class Group implements OnInit {
     const currentUser = this.userService.getCurrentUser();
     if (currentUser) {
       this.groups = this.groupService.getUserGroups(currentUser.id);
+      
+      this.loadUsersForGroups();
     } else {
       this.groups = [];
     }
+  }
+
+  
+  private async loadUsersForGroups() {
+    if (this.groups.length === 0) return;
+
+    
+    const authorIds = [...new Set(this.groups.map(g => g.authorId))];
+
+    
+    for (const authorId of authorIds) {
+      if (!this.usersMap.has(authorId)) {
+        try {
+          const user = await this.userService.getPublicUser(authorId);
+          if (user) {
+            this.usersMap.set(authorId, user);
+          }
+        } catch (error) {
+          console.error(`Error loading user ${authorId}:`, error);
+        }
+      }
+    }
+  }
+
+  
+  getAuthorUsername(authorId: number): string {
+    const user = this.usersMap.get(authorId);
+    return user ? user.username : 'Cargando...';
   }
 
   openCreateDialog() {
@@ -137,11 +170,6 @@ export class Group implements OnInit {
     };
   }
 
-  getAuthorUsername(authorId: number): string {
-    const user = this.userService.getAll().find(u => u.id === authorId);
-    return user ? user.username : 'Desconocido';
-  }
-
   viewGroupDetail(groupId: number) {
     this.router.navigate(['/group-detail', groupId]);
   }
@@ -153,4 +181,3 @@ export class Group implements OnInit {
     this.editingGroupId = null;
   }
 }
-

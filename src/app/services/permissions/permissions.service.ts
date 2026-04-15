@@ -37,7 +37,7 @@ export class PermissionService {
   ]);
 
   private permissions = signal<UserPermissions>({
-    1: {
+    7: {
       'group': {
         view: true,
         create: true,
@@ -68,6 +68,21 @@ export class PermissionService {
       }
     },
     3: {
+      'group': {
+        view: true,
+        create: false,
+        edit: false,
+        delete: false
+      },
+      'users': {
+        view: false,
+        create: false,
+        edit: false,
+        delete: false,
+        editState: false
+      }
+    },
+    13: {
       'group': {
         view: true,
         create: false,

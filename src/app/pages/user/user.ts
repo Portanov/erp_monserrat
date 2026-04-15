@@ -9,7 +9,8 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { InputTextModule } from 'primeng/inputtext';
 import { RippleModule } from 'primeng/ripple';
-import { UserService, UserData } from '../../services/user/user.service';
+import { UserService } from '../../services/user/user.service';
+import { User as UserData, UserWithPass } from '../../models/user/user.model';
 import { DialogModule } from 'primeng/dialog';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { PasswordModule } from 'primeng/password';
@@ -60,12 +61,8 @@ export class User implements OnInit {
   items: MenuItem[] = [];
   users: UserData[] = [];
   statuses = [
-    { label: 'Activo', value: 'Activo' },
-    { label: 'Inactivo', value: 'Inactivo' }
-  ];
-  roles = [
-    { label: 'Administrador', value: 'Administrador' },
-    { label: 'Usuario', value: 'Usuario' }
+    { label: 'Activo', value: true },
+    { label: 'Inactivo', value: false }
   ];
   clonedUsers: { [s: string]: UserData } = {};
   createdVisible: boolean = false;
@@ -76,10 +73,9 @@ export class User implements OnInit {
   currentUserId = computed(() => this.currentUser()?.id);
 
   pages: PageConfig[] = [];
-
   userPermissions: { [page: string]: PagePermissions } = {};
 
-  newUser: UserData = {
+  newUser = {
     id: 0,
     username: '',
     email: '',
@@ -87,10 +83,9 @@ export class User implements OnInit {
     password: '',
     phone: '',
     address: '',
-    birthDate: null,
-    registeredDate: '',
-    role: 'Usuario',
-    status: 'Activo'
+    birthDate: null as Date | null,
+    created_at: '',
+    status: true
   };
 
   hasPermission(page: string, action: string): boolean {
@@ -129,9 +124,8 @@ export class User implements OnInit {
       phone: '',
       address: '',
       birthDate: null,
-      registeredDate: '',
-      role: 'Usuario',
-      status: 'Activo'
+      created_at: '',
+      status: true
     };
     this.initializeDefaultPermissions();
   }
@@ -141,7 +135,18 @@ export class User implements OnInit {
     this.editingUserId = user.id;
     this.createdVisible = true;
     this.activeStep = 1;
-    this.newUser = { ...user };
+    this.newUser = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      fullName: user.fullName,
+      password: '',
+      phone: user.phone || '',
+      address: user.address || '',
+      birthDate: user.birthDate ? new Date(user.birthDate) : null,
+      created_at: user.created_at || '',
+      status: user.status || false,
+    };
     this.loadUserPermissions(user.id);
   }
 
@@ -156,8 +161,8 @@ export class User implements OnInit {
     });
   }
 
-  loadUserPermissions(userId: number) {
-    const existingPermissions = this.permissionService.getUserPermissions(userId);
+  async loadUserPermissions(userId: number) {
+    const existingPermissions = await this.permissionService.getUserPermissions(userId);
     if (existingPermissions) {
       this.userPermissions = { ...existingPermissions };
     } else {
@@ -204,39 +209,30 @@ export class User implements OnInit {
       'create': 'Crear',
       'edit': 'Editar',
       'delete': 'Eliminar',
-      'editState': 'Editar Estado',
-      'manageMembers': 'Gestionar Miembros',
-      'resetPassword': 'Resetear Password'
+      'editState': 'Editar Estado'
     };
     return labels[permission] || permission;
   }
 
-  loadUsers() {
-    this.users = this.userService.getAll();
+  async loadUsers() {
+    try {
+      this.users = await this.userService.getAll();
+    } catch (error) {
+      console.error('Error loading users:', error);
+      this.alertService.error('Error', 'No se pudieron cargar los usuarios');
+    }
   }
 
-  getSeverity(status: string) {
-    switch (status) {
-      case 'Activo':
-        return 'success';
-      case 'Inactivo':
-        return 'danger';
-      default:
-        return 'info';
-    }
+  getSeverity(status: boolean) {
+    return status ? 'success' : 'danger';
+  }
+
+  getStatusLabel(status: boolean): string {
+    return status ? 'Activo' : 'Inactivo';
   }
 
   onRowEditInit(user: UserData) {
     this.clonedUsers[user.username] = { ...user };
-  }
-
-  onRowEditSave(user: UserData) {
-    if (user.username && user.email && user.fullName) {
-      this.userService.update(user);
-      delete this.clonedUsers[user.username];
-      this.loadUsers();
-      this.alertService.success('Éxito', 'Usuario actualizado correctamente');
-    }
   }
 
   onRowEditCancel(user: UserData, index: number) {
@@ -244,47 +240,63 @@ export class User implements OnInit {
     delete this.clonedUsers[user.username];
   }
 
-  deleteUser(username: string) {
+  async deleteUser(username: string) {
     const userToDelete = this.users.find(u => u.username === username);
     if (userToDelete) {
-      this.userService.delete(username);
-      this.permissionService.removeUser(userToDelete.id);
-      this.loadUsers();
-      this.alertService.success('Éxito', 'Usuario eliminado correctamente');
+      const success = await this.userService.deleteUser(username);
+      if (success) {
+        await this.permissionService.removeUser(userToDelete.id);
+        await this.loadUsers();
+        this.alertService.success('Éxito', 'Usuario eliminado correctamente');
+      } else {
+        this.alertService.error('Error', 'Error al eliminar el usuario');
+      }
     }
   }
 
-  saveUser() {
+  async saveUser() {
     if (this.isEditing && this.editingUserId) {
-      const updatedUser = this.userService.update(this.newUser);
+      const updatedUser = await this.userService.update(this.editingUserId, {
+        id: this.editingUserId,
+        username: this.newUser.username,  
+        fullName: this.newUser.fullName,
+        email: this.newUser.email,
+        phone: this.newUser.phone,
+        address: this.newUser.address,
+        birthDate: this.newUser.birthDate?.toISOString(),
+        status: this.newUser.status
+      });
+
       if (updatedUser) {
         // Guardar todos los permisos
-        Object.keys(this.userPermissions).forEach(page => {
-          this.permissionService.assignPermissions(
-            this.editingUserId!,
-            page,
-            this.userPermissions[page]
-          );
-        });
-        this.loadUsers();
+        for (const [page, permissions] of Object.entries(this.userPermissions)) {
+          await this.permissionService.assignPermissions(this.editingUserId, page, permissions);
+        }
+        await this.loadUsers();
         this.createdVisible = false;
         this.alertService.success('Éxito', 'Usuario y permisos actualizados correctamente');
       } else {
         this.alertService.error('Error', 'Error al actualizar el usuario');
       }
     } else {
-      if (this.userService.register(this.newUser)) {
-        const newUser = this.userService.getByUsername(this.newUser.username);
+      const success = await this.userService.register({
+        username: this.newUser.username,
+        email: this.newUser.email,
+        password: this.newUser.password,
+        fullName: this.newUser.fullName,
+        phone: this.newUser.phone,
+        address: this.newUser.address,
+        birthDate: this.newUser.birthDate?.toISOString().split('T')[0] || ''
+      });
+
+      if (success) {
+        const newUser = await this.userService.getByUsername(this.newUser.username);
         if (newUser) {
-          Object.keys(this.userPermissions).forEach(page => {
-            this.permissionService.assignPermissions(
-              newUser.id,
-              page,
-              this.userPermissions[page]
-            );
-          });
+          for (const [page, permissions] of Object.entries(this.userPermissions)) {
+            await this.permissionService.assignPermissions(newUser.id, page, permissions);
+          }
         }
-        this.loadUsers();
+        await this.loadUsers();
         this.createdVisible = false;
         this.alertService.success('Éxito', 'Usuario creado correctamente');
       } else {
@@ -297,9 +309,11 @@ export class User implements OnInit {
     this.createdVisible = false;
   }
 
-  updateUserStatus(user: UserData) {
-    this.userService.update(user);
-    this.alertService.success('Éxito', 'Estado del usuario actualizado correctamente');
+  async updateUserStatus(user: UserData) {
+    const updated = await this.userService.updateStatus(user.id, user.status || false);
+    if (updated) {
+      this.alertService.success('Éxito', 'Estado del usuario actualizado correctamente');
+    }
   }
 
   onStatusEditComplete(event: any, user: UserData) {

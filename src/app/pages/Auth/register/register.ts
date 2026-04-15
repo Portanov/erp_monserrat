@@ -1,12 +1,13 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { InputTextModule } from 'primeng/inputtext';
 import { CardModule } from 'primeng/card';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { IftaLabelModule } from 'primeng/iftalabel';
 import { ButtonModule } from 'primeng/button';
-import { MessageService } from 'primeng/api';
 import { MessageModule } from 'primeng/message';
+import { AlertService } from '../../../services/alerts/alert.service';
+import { UserService } from '../../../services/user/user.service';
 
 @Component({
   selector: 'app-register',
@@ -23,6 +24,9 @@ import { MessageModule } from 'primeng/message';
   styleUrl: './register.css',
 })
 export class Register {
+  private alertService = inject(AlertService);
+  private userService = inject(UserService);
+
   model = {
     username: '',
     email: '',
@@ -31,7 +35,7 @@ export class Register {
     fullName: '',
     address: '',
     birthday: '',
-    phone: ''
+    phone: '',
   };
 
   passwordsMatch(): boolean {
@@ -60,7 +64,7 @@ export class Register {
     return onlyDigits.test(this.model.phone) && this.model.phone.length === 10;
   }
 
-  onSubmit() {
+  async onSubmit() {
     if (!this.passwordsMatch()) {
       alert('Las contraseñas no coinciden.');
       return;
@@ -77,9 +81,33 @@ export class Register {
       alert('Teléfono inválido. Solo número y 10 dígitos.');
       return;
     }
+    if (!this.model.address) {
+      alert('La dirección es requerida');
+      return;
+    }
 
-    console.log('Registro enviado', this.model);
-    alert('Registro enviado correctamente.');
-    this.model = { username: '', email: '', password: '', confirmPassword: '', fullName: '', address: '', birthday: '', phone: '' };
+    const formattedBirthdate = this.model.birthday.split('T')[0];
+
+    const userData = {
+      username: this.model.username,
+      email: this.model.email,
+      password: this.model.password,
+      fullName: this.model.fullName,
+      address: this.model.address,
+      birthDate: formattedBirthdate,
+      phone: this.model.phone
+    }
+
+    try {
+      const result = await this.userService.register(userData);
+      if (result === true) {
+        this.model = { username: '', email: '', password: '', confirmPassword: '', fullName: '', address: '', birthday: '', phone: '' };
+        this.alertService.success('Éxito', 'Registro exitoso.');
+      } else {
+        this.alertService.error('Error','Error al registrar usuario. El usuario o email ya existe.');
+      }
+    } catch (error: any) {
+      this.alertService.error('Error',error.message || 'Error al registrar usuario');
+    }
   }
 }

@@ -1,4 +1,3 @@
-<!-- comment-dialog.html -->
 <p-dialog [(visible)]="visible" [style]="{ width: '550px', height: '580px' }" header="Comentarios del Ticket"
   [modal]="true" styleClass="p-fluid comment-dialog" (onHide)="onHide()">
 
@@ -18,23 +17,22 @@
         </div>
         }
 
-        @for (comment of comments; track comment.id) {
-        @let user = getUserById(comment.userId);
+        @for (item of commentsWithUsers; track item.comment.id) {
         <p-card class="border-b rounded-none border-gray-700 mb-1 p-3 pb-1">
           <ng-template #header>
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <p-avatar [label]="user?.fullName?.charAt(0) || '?'"
+                <p-avatar [label]="item.user?.fullName?.charAt(0) || '?'"
                   [style]="{ 'background-color': '#dee9fc', color: '#1a2551' }" shape="circle">
                 </p-avatar>
-                <span class="font-light">{{user?.fullName || 'Usuario'}}</span>
+                <span class="font-light">{{item.user?.fullName || 'Usuario'}}</span>
               </div>
               <div>
-                <span class="text-xs text-color-secondary">{{comment.createdAt | date:'dd/MM/yyyy HH:mm'}}</span>
+                <span class="text-xs text-color-secondary">{{item.comment.createdAt | date:'dd/MM/yyyy HH:mm'}}</span>
               </div>
             </div>
           </ng-template>
-          <p class="text-sm -mt-1">{{comment.content}}</p>
+          <p class="text-sm -mt-1">{{item.comment.content}}</p>
         </p-card>
         }
       </div>

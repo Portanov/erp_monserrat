@@ -36,13 +36,18 @@ export class Login {
     password: '',
   };
 
-  onSubmit() {
+  async onSubmit() {
     if (!this.model.identifier || !this.model.password) {
       this.alertService.error('Error', 'Por favor completa todos los campos.');
       return;
     }
 
-    const loginSuccess = this.userService.login(this.model.identifier, this.model.password);
+    const loginData = {
+      email: this.model.identifier,
+      password: this.model.password
+    }
+
+    const loginSuccess = await this.userService.login(loginData);
 
     if (!loginSuccess) {
       this.alertService.error('Error', 'Usuario o contraseña incorrectos.');

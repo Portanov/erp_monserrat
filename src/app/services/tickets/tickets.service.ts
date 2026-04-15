@@ -1,5 +1,6 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
-import { UserData, UserService } from '../user/user.service';
+import { User } from '../../models/user/user.model';
+import { UserService } from '../user/user.service';
 import { GroupData, GroupService } from '../group/group.service';
 
 export type TicketStatus = 'pending' | 'in-progress' | 'review' | 'done' | 'blocked';
@@ -47,6 +48,9 @@ export class TicketsService {
   private tickets = signal<Ticket[]>([]);
   private currentGroup = signal<GroupData | null>(null);
 
+  // 🔥 NUEVO: Caché de usuarios para evitar múltiples peticiones
+  private usersCache: Map<number, User> = new Map();
+
   currentGroupTickets = computed(() => {
     const group = this.currentGroup();
     const allTickets = this.tickets();
@@ -64,8 +68,8 @@ export class TicketsService {
         title: 'Error en el login',
         description: 'Los usuarios no pueden iniciar sesión en el sistema',
         status: 'in-progress',
-        assignedToId: 2,
-        createdById: 1,
+        assignedToId: 13,
+        createdById: 7,
         priority: 'urgente',
         createdAt: new Date('2024-03-10'),
         dueDate: new Date('2024-03-15'),
@@ -73,7 +77,7 @@ export class TicketsService {
         comments: [
           {
             id: 'c1',
-            userId: 1,
+            userId: 13,
             content: 'Ya estoy revisando el problema',
             createdAt: new Date('2024-03-10T10:30:00')
           }
@@ -81,7 +85,7 @@ export class TicketsService {
         history: [
           {
             id: 'h1',
-            userId: 1,
+            userId: 7,
             action: 'creación',
             timestamp: new Date('2024-03-10T10:00:00')
           }
@@ -93,7 +97,7 @@ export class TicketsService {
         description: 'Agregar funcionalidad para exportar reportes a PDF',
         status: 'pending',
         assignedToId: null,
-        createdById: 2,
+        createdById: 7,
         priority: 'media',
         createdAt: new Date('2024-03-11'),
         dueDate: new Date('2024-03-20'),
@@ -106,8 +110,8 @@ export class TicketsService {
         title: 'Problemas de rendimiento',
         description: 'Las consultas son muy lentas en el módulo de reportes',
         status: 'review',
-        assignedToId: 1,
-        createdById: 2,
+        assignedToId: 13,
+        createdById: 7,
         priority: 'alta',
         createdAt: new Date('2024-03-09'),
         dueDate: new Date('2024-03-14'),
@@ -120,8 +124,8 @@ export class TicketsService {
         title: 'Actualizar documentación',
         description: 'Actualizar el manual de usuario con nuevas funcionalidades',
         status: 'review',
-        assignedToId: 1,
-        createdById: 1,
+        assignedToId: 13,
+        createdById: 7,
         priority: 'baja',
         createdAt: new Date('2024-03-08'),
         dueDate: new Date('2024-03-25'),
@@ -230,29 +234,30 @@ export class TicketsService {
       history: [...oldTicket.history]
     };
 
-    const changes = this.getChanges(oldTicket, updatedTicket);
-    changes.forEach(change => {
-      ticketWithHistory.history.push({
-        id: `hist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        userId: currentUser.id,
-        action: 'actualización',
-        field: change.field,
-        oldValue: change.oldValue,
-        newValue: change.newValue,
-        timestamp: new Date()
+    this.getChanges(oldTicket, updatedTicket, currentUser.id).then(changes => {
+      changes.forEach(change => {
+        ticketWithHistory.history.push({
+          id: `hist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          userId: currentUser.id,
+          action: 'actualización',
+          field: change.field,
+          oldValue: change.oldValue,
+          newValue: change.newValue,
+          timestamp: new Date()
+        });
       });
-    });
 
-    this.tickets.update(tickets => {
-      const newTickets = [...tickets];
-      newTickets[index] = ticketWithHistory;
-      return newTickets;
+      this.tickets.update(tickets => {
+        const newTickets = [...tickets];
+        newTickets[index] = ticketWithHistory;
+        return newTickets;
+      });
     });
 
     return ticketWithHistory;
   }
 
-  private getChanges(oldTicket: Ticket, newTicket: Ticket): { field: string; oldValue: string; newValue: string }[] {
+  private async getChanges(oldTicket: Ticket, newTicket: Ticket, currentUserId: number): Promise<{ field: string; oldValue: string; newValue: string }[]> {
     const changes: { field: string; oldValue: string; newValue: string }[] = [];
 
     if (oldTicket.status !== newTicket.status) {
@@ -262,15 +267,28 @@ export class TicketsService {
         newValue: this.getStatusLabel(newTicket.status)
       });
     }
+
     if (oldTicket.assignedToId !== newTicket.assignedToId) {
-      const oldUser = oldTicket.assignedToId ? this.userService.getByUsername(oldTicket.assignedToId.toString()) : null;
-      const newUser = newTicket.assignedToId ? this.userService.getByUsername(newTicket.assignedToId.toString()) : null;
+      let oldUserName = 'Sin asignar';
+      let newUserName = 'Sin asignar';
+
+      if (oldTicket.assignedToId) {
+        const oldUser = await this.getUserById(oldTicket.assignedToId);
+        oldUserName = oldUser?.fullName || 'Sin asignar';
+      }
+
+      if (newTicket.assignedToId) {
+        const newUser = await this.getUserById(newTicket.assignedToId);
+        newUserName = newUser?.fullName || 'Sin asignar';
+      }
+
       changes.push({
         field: 'asignado',
-        oldValue: oldUser?.fullName || 'Sin asignar',
-        newValue: newUser?.fullName || 'Sin asignar'
+        oldValue: oldUserName,
+        newValue: newUserName
       });
     }
+
     if (oldTicket.priority !== newTicket.priority) {
       changes.push({
         field: 'prioridad',
@@ -327,10 +345,23 @@ export class TicketsService {
     return true;
   }
 
-  getUserById(userId: number | null): UserData | undefined {
+  async getUserById(userId: number | null): Promise<User | undefined> {
     if (!userId) return undefined;
-    const users = this.userService.getAll();
-    return users.find(u => u.id === userId);
+
+    if (this.usersCache.has(userId)) {
+      return this.usersCache.get(userId);
+    }
+
+    try {
+      const user = await this.userService.getById(userId);
+      if (user) {
+        this.usersCache.set(userId, user);
+      }
+      return user || undefined;
+    } catch (error) {
+      console.error(`Error getting user ${userId}:`, error);
+      return undefined;
+    }
   }
 
   getGroupById(groupId: number): GroupData | undefined {
@@ -433,11 +464,11 @@ export class TicketsService {
     return ticket.assignedToId === userId || ticket.createdById === userId;
   }
 
-  getCurrentGroupUsers(): UserData[] {
+  async getCurrentGroupUsers(): Promise<User[]> {
     const currentGroup = this.currentGroup();
     if (!currentGroup) return [];
 
-    const allUsers = this.userService.getAll();
-    return allUsers;
+    const allUsers = await this.userService.getAll();
+    return allUsers.filter(user => currentGroup.members.includes(user.id));
   }
 }
