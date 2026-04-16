@@ -1,7 +1,8 @@
 import { Component, Input, SimpleChanges, inject, ViewChild, Output, EventEmitter } from '@angular/core';
 import { Table, TableModule } from 'primeng/table';
 import { FormsModule } from '@angular/forms';
-import { TicketsService, Ticket } from '../../services/tickets/tickets.service';
+import { TicketsService } from '../../services/tickets/tickets.service';
+import { Ticket } from '../../models/tickets/ticket.model';
 import { CommonModule } from '@angular/common';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
@@ -16,6 +17,7 @@ import { User } from '../../models/user/user.model';
 import { TicketDialogComponent } from '../ticket-dialog/ticket-dialog';
 import { CommentDialogComponent } from '../comment-dialog/comment-dialog';
 import { AlertService } from '../../services/alerts/alert.service';
+import { firstValueFrom } from 'rxjs';
 
 interface Column {
   field: string;
@@ -60,19 +62,20 @@ export class TicketTable {
   tickets: Ticket[] = [];
   loading: boolean = true;
 
-  
+
   get usuario(): User | null {
     return this.userService.currentUser();
   }
 
   showTicketDialog: boolean = false;
   showCommentDialog: boolean = false;
-  selectedTicketId: string | null = null;
+  selectedTicketId: number | null = null;
+  currenUser: User | null = null;
 
-  
+
   usersCache: Map<number, User> = new Map();
 
-  
+
   loadingUsers: Set<number> = new Set();
 
   statusOptions: FilterOption[] = [
@@ -104,9 +107,10 @@ export class TicketTable {
 
   ngOnInit() {
     this.loadTickets();
+    this.currenUser = this.userService.getCurrentUser();
   }
 
-  public loadTickets() {
+  public async loadTickets() {
     if (!this.groupId) {
       console.log('No hay groupId, limpiando tabla');
       this.tickets = [];
@@ -114,28 +118,29 @@ export class TicketTable {
       return;
     }
     this.loading = true;
-    setTimeout(() => {
-      this.tickets = this.ticketsService.getTicketsByGroup(this.groupId!);
+    try {
+      this.tickets = await firstValueFrom(this.ticketsService.getTicketsByGroup(this.groupId!));
       console.log('Tickets cargados en tabla:', this.tickets.length);
 
-      
       this.loadUsersFromTickets();
-
+    } catch (error) {
+      console.error('Error al cargar tickets:', error);
+    } finally {
       this.loading = false;
-    }, 300);
+    }
   }
 
-  
+
   private async loadUsersFromTickets() {
-    
+
     const userIds = new Set<number>();
 
     this.tickets.forEach(ticket => {
-      if (ticket.assignedToId) userIds.add(ticket.assignedToId);
-      if (ticket.createdById) userIds.add(ticket.createdById);
+      if (ticket.assignedToId) userIds.add(Number(ticket.assignedToId));
+      if (ticket.createdById) userIds.add(Number(ticket.createdById));
     });
 
-    
+
     for (const userId of userIds) {
       if (!this.usersCache.has(userId) && !this.loadingUsers.has(userId)) {
         this.loadingUsers.add(userId);
@@ -153,13 +158,12 @@ export class TicketTable {
     }
   }
 
-  
-  getUserById(userId: number | null): User | null {
+
+  getUserById(userId: number | string | null): User | null {
     if (!userId) return null;
-    return this.usersCache.get(userId) || null;
+    return this.usersCache.get(Number(userId)) || null;
   }
 
-  
   private async ensureUserLoaded(userId: number): Promise<void> {
     if (!this.usersCache.has(userId) && !this.loadingUsers.has(userId)) {
       this.loadingUsers.add(userId);
@@ -167,7 +171,7 @@ export class TicketTable {
         const user = await this.userService.getById(userId);
         if (user) {
           this.usersCache.set(userId, user);
-          
+
           this.loadTickets();
         }
       } catch (error) {
@@ -185,9 +189,17 @@ export class TicketTable {
     }
   }
 
-  updateTicketStatus(ticket: Ticket) {
+  async updateTicketStatus(ticket: Ticket) {
+    if (!this.currenUser) {
+      this.alertService.error('Error', 'Usuario no autenticado');
+      return;
+    }
+    if (Number(ticket.assignedToId) !== this.currenUser.id) {
+      this.alertService.error('Error', 'Solo puedes cambiar el estado de tickets asignados a ti');
+      return;
+    }
     try {
-      const updatedTicket = this.ticketsService.updateTicket(ticket);
+      const updatedTicket = await firstValueFrom(this.ticketsService.updateTicket(ticket.id, ticket, this.currenUser.id));
       const index = this.tickets.findIndex(t => t.id === ticket.id);
       if (index !== -1) {
         this.tickets[index] = updatedTicket;
@@ -200,8 +212,8 @@ export class TicketTable {
     }
   }
 
-  onStatusEditComplete(event: any, ticket: Ticket) {
-    this.updateTicketStatus(ticket);
+  async onStatusEditComplete(event: any, ticket: Ticket) {
+    await this.updateTicketStatus(ticket);
   }
 
   openEditTicket(ticket: Ticket) {
@@ -239,5 +251,20 @@ export class TicketTable {
   isOverdue(ticket: Ticket): boolean {
     if (!ticket.dueDate || ticket.status === 'done') return false;
     return new Date(ticket.dueDate) < new Date();
+  }
+
+  canEditStatus(ticket: Ticket): boolean {
+    if (!this.usuario) return false;
+    return Number(ticket.assignedToId) === this.usuario.id;
+  }
+
+  canEditTicket(ticket: Ticket): boolean {
+    if (!this.usuario) return false;
+    return Number(ticket.createdById) === this.usuario.id;
+  }
+
+  canCommentTicket(ticket: Ticket): boolean {
+    if (!this.usuario) return false;
+    return Number(ticket.createdById) === this.usuario.id || Number(ticket.assignedToId) === this.usuario.id;
   }
 }

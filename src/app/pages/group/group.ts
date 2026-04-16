@@ -7,7 +7,8 @@ import { ProgressBarModule } from 'primeng/progressbar';
 import { PanelMenuModule } from 'primeng/panelmenu';
 import { MenuItem } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
-import { GroupService, GroupData } from '../../services/group/group.service';
+import { GroupService } from '../../services/group/group.service';
+import { GroupData } from '../../models/groups/groups.model';
 import { UserService } from '../../services/user/user.service';
 import { User } from '../../models/user/user.model';
 import { DialogModule } from 'primeng/dialog';
@@ -16,6 +17,8 @@ import { FormsModule } from '@angular/forms';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectModule } from 'primeng/select';
 import { PermissionService } from '../../services/permissions/permissions.service';
+import { CreateGroupDto } from '../../models/groups/groups.model';
+import { AlertService } from '../../services/alerts/alert.service';
 
 interface level {
   label: string;
@@ -42,6 +45,7 @@ interface level {
 export class Group implements OnInit {
   private router = inject(Router);
   private permissionService = inject(PermissionService);
+  private alertService = inject(AlertService);
   items: MenuItem[] = [];
   groups: GroupData[] = [];
   createVisible: boolean = false;
@@ -50,17 +54,17 @@ export class Group implements OnInit {
   levels: level[] = [];
   selectedlevel: level | null = null;
   userid: number | null = null;
+  loading: boolean = false;
 
   
   usersMap: Map<number, User> = new Map();
   loadingUsers: boolean = false;
 
-  newGroup: Omit<GroupData, 'id' | 'authorId'> = {
+  newGroup: CreateGroupDto = {
     name: '',
-    categoria: '',
-    nivel: '',
-    members: [],
-    tickets: 0
+    category: '',
+    level: '',
+    authorId: this.userid || 0,
   };
 
   constructor(private groupService: GroupService, private userService: UserService) { }
@@ -89,25 +93,28 @@ export class Group implements OnInit {
     this.items = menuItems;
   }
 
-  loadGroups() {
+  async loadGroups() {
+    this.loading = true;
     const currentUser = this.userService.getCurrentUser();
     if (currentUser) {
-      this.groups = this.groupService.getUserGroups(currentUser.id);
-      
-      this.loadUsersForGroups();
+      try {
+        this.groups = await this.groupService.getUserGroups(currentUser.id);
+        await this.loadUsersForGroups();
+      } catch (error) {
+        console.error('Error loading groups:', error);
+        this.groups = [];
+      }
     } else {
       this.groups = [];
     }
+    this.loading = false;
   }
 
-  
   private async loadUsersForGroups() {
     if (this.groups.length === 0) return;
 
-    
     const authorIds = [...new Set(this.groups.map(g => g.authorId))];
 
-    
     for (const authorId of authorIds) {
       if (!this.usersMap.has(authorId)) {
         try {
@@ -122,7 +129,6 @@ export class Group implements OnInit {
     }
   }
 
-  
   getAuthorUsername(authorId: number): string {
     const user = this.usersMap.get(authorId);
     return user ? user.username : 'Cargando...';
@@ -136,37 +142,61 @@ export class Group implements OnInit {
 
   openEditDialog(group: GroupData) {
     this.editingGroupId = group.id;
-    const { id, authorId, ...rest } = group;
-    this.newGroup = rest;
+    this.newGroup = {
+      name: group.name,
+      category: group.category,
+      level: group.level,
+      authorId: group.authorId,
+    };
     this.editVisible = true;
   }
 
-  saveGroup() {
-    if (this.editingGroupId === null) {
-      this.groupService.create(this.newGroup);
-      this.createVisible = false;
-    } else {
-      this.groupService.update(this.editingGroupId, this.newGroup);
-      this.editVisible = false;
+  async saveGroup() {
+    try {
+      if (this.editingGroupId === null) {
+        const created = await this.groupService.create(this.newGroup);
+        if (created) {
+          this.createVisible = false;
+          this.alertService.success('Grupo creado', `El grupo ${created.name} ha sido creado exitosamente`);
+        }
+      } else {
+        const updated = await this.groupService.update(this.editingGroupId, this.newGroup);
+        if (updated) {
+          this.editVisible = false;
+          this.alertService.success('Grupo actualizado', `El grupo ${updated.name} ha sido actualizado`);
+        }
+      }
+      await this.loadGroups();
+      this.resetForm();
+    } catch (error) {
+      console.error('Error saving group:', error);
+      this.alertService.error('Error', 'No se pudo guardar el grupo');
     }
-    this.loadGroups();
-    this.resetForm();
   }
 
-  deleteGroup(id: number) {
+  async deleteGroup(id: number) {
     if (confirm('¿Está seguro de que desea eliminar este grupo?')) {
-      this.groupService.delete(id);
-      this.loadGroups();
+      try {
+        const success = await this.groupService.deleteGroup(id);
+        if (success) {
+          await this.loadGroups();
+          this.alertService.success('Grupo eliminado', 'El grupo ha sido eliminado correctamente');
+        } else {
+          this.alertService.error('Error', 'No se pudo eliminar el grupo');
+        }
+      } catch (error) {
+        console.error('Error deleting group:', error);
+        this.alertService.error('Error', 'Ocurrió un error al eliminar el grupo');
+      }
     }
   }
 
   resetForm() {
     this.newGroup = {
       name: '',
-      categoria: '',
-      nivel: '',
-      members: [],
-      tickets: 0
+      category: '',
+      level: '',
+      authorId: this.userid || 0,
     };
   }
 

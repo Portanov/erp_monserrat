@@ -10,20 +10,12 @@
         </div>
         <div>
           <label>Nivel</label>
-          <p-select [options]="levels" [(ngModel)]="newGroup.nivel" optionLabel="label" optionValue="value"
-            placeholder="Seleccionar nivel" class="w-full"></p-select>
+          <p-select [options]="levels" [(ngModel)]="newGroup.level" optionLabel="label" optionValue="value"
+            placeholder="Seleccionar nivel" [appendTo]="'body'" class="w-full"></p-select>
         </div>
         <div>
           <label>Categoría</label>
-          <input type="text" pInputText [(ngModel)]="newGroup.categoria" class="w-full">
-        </div>
-        <div>
-          <label>Miembros</label>
-          <p-inputnumber class="w-full" [(ngModel)]="newGroup.members.length" disabled />
-        </div>
-        <div>
-          <label>Tickets</label>
-          <input type="number" pInputText [(ngModel)]="newGroup.tickets" class="w-full">
+          <input type="text" pInputText [(ngModel)]="newGroup.category" class="w-full">
         </div>
       </div>
     </div>
@@ -53,13 +45,13 @@
               }
             </div>
             <div class="p-4 pb-0 pt-0">
-              <p-chip [label]="group.categoria" class="text-xs"></p-chip>
+              <p-chip [label]="group.category" class="text-xs"></p-chip>
             </div>
           </ng-template>
           <div class="grid grid-cols-3">
             <div class="flex flex-col items-center">
               <div class="font-light">Nivel</div>
-              <div class="font-bold">{{ group.nivel }}</div>
+              <div class="font-bold">{{ group.level }}</div>
             </div>
             <div class="flex flex-col items-center">
               <div class="font-light">Miembros</div>
@@ -67,7 +59,7 @@
             </div>
             <div class="flex flex-col items-center">
               <div class="font-light">Tickets</div>
-              <div class="font-bold">{{ group.tickets }}</div>
+              <div class="font-bold">{{ group.ticketCount }}</div>
             </div>
           </div>
           <p-progressbar [value]="50" class="mt-2"></p-progressbar>

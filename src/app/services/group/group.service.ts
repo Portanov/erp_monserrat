@@ -1,86 +1,209 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { UserService } from '../user/user.service';
 import { User } from '../../models/user/user.model';
+import { GatewayBaseService } from '../gateway-base/gateway.service';
+import { CreateGroupDto, GroupData, GroupResponseDto, UpdateGroupDto } from '../../models/groups/groups.model';
+import { firstValueFrom } from 'rxjs';
 
-export interface GroupData {
-  id: number,
-  name: string,
-  categoria: string,
-  nivel: string,
-  authorId: number,
-  members: number[],
-  tickets: number
-}
 
 @Injectable({
   providedIn: 'root',
 })
-export class GroupService {
-  private groups: GroupData[] = [
-    { id: 1, name: 'Grupo A', categoria: 'Administrador', nivel: 'Alto', authorId: 7, members: [7], tickets: 5 },
-    { id: 2, name: 'Grupo B', categoria: 'Categoría 2', nivel: 'Medio', authorId: 7, members: [7,13], tickets: 10 },
-    { id: 3, name: 'Grupo C', categoria: 'Categoría 3', nivel: 'Bajo', authorId: 7, members: [7,13,], tickets: 7 },
-  ]
-  private nextId = 4;
+export class GroupService extends GatewayBaseService {
+  private userService = inject(UserService);
 
-  constructor(private userService: UserService) { }
+  private groupsCache: GroupData[] | null = null;
+  private cacheTimestamp: number = 0;
+  private readonly CACHE_DURATION = 30000;
 
-  getAll(): GroupData[] {
-    return [...this.groups];
-  }
-
-  getUserGroups(userId: number): GroupData[] {
-    return this.groups.filter(g => g.authorId === userId || g.members.includes(userId));
-  }
-
-  async addMember(groupId: number, email: string): Promise<boolean> {
-    const group = this.groups.find(g => g.id === groupId);
-    if (!group) return false;
+  /**
+   * Obtiene todos los grupos
+   */
+  async getAll(): Promise<GroupData[]> {
+    if (this.groupsCache && (Date.now() - this.cacheTimestamp) < this.CACHE_DURATION) {
+      return [...this.groupsCache];
+    }
 
     try {
-      const user = await this.userService.getByEmail(email);
-      if (!user) return false;
+      const response = await firstValueFrom(this.get<GroupResponseDto[]>('/groups'));
+      const groups = this.mapToGroupDataArray(response);
+      this.groupsCache = groups;
+      this.cacheTimestamp = Date.now();
+      return groups;
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+      return [];
+    }
+  }
 
-      const userId = user.id;
-      if (group.members.includes(userId)) {
-        return false;
+  /**
+   * Obtiene un grupo por ID
+   */
+  async getById(id: number): Promise<GroupData | null> {
+    try {
+      if (this.groupsCache) {
+        const cached = this.groupsCache.find(g => g.id === id);
+        if (cached) return cached;
       }
-      group.members.push(userId);
+
+      const response = await firstValueFrom(this.get<GroupResponseDto>(`/groups/${id}`));
+      return this.mapToGroupData(response);
+    } catch (error) {
+      console.error(`Error fetching group ${id}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Obtiene los grupos de un usuario
+   */
+  async getUserGroups(userId: number): Promise<GroupData[]> {
+    try {
+      const response = await firstValueFrom(this.get<GroupResponseDto[]>(`/groups/user/${userId}`));
+      return this.mapToGroupDataArray(response);
+    } catch (error) {
+      console.error(`Error fetching user groups for ${userId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Crea un nuevo grupo
+   */
+  async create(group: CreateGroupDto): Promise<GroupData | null> {
+    try {
+      const currentUser = this.userService.getCurrentUser();
+      if (!currentUser) throw new Error('Usuario no autenticado');
+
+      const response = await firstValueFrom(this.post<GroupResponseDto>('/groups', group));
+
+      this.invalidateCache();
+
+      return this.mapToGroupData(response);
+    } catch (error) {
+      console.error('Error creating group:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Actualiza un grupo
+   */
+  async update(id: number, updated: UpdateGroupDto): Promise<GroupData | null> {
+    try {
+      const response = await firstValueFrom(this.put<GroupResponseDto>(`/groups/${id}`, updated));
+
+      this.invalidateCache();
+
+      return this.mapToGroupData(response);
+    } catch (error) {
+      console.error(`Error updating group ${id}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Elimina un grupo
+   */
+  async deleteGroup(id: number): Promise<boolean> {
+    try {
+      await firstValueFrom(this.delete<void>(`/groups/${id}`));
+
+      this.invalidateCache();
+
       return true;
     } catch (error) {
-      console.error('Error adding member:', error);
+      console.error(`Error deleting group ${id}:`, error);
       return false;
     }
   }
 
-  removeMember(groupId: number, userId: number): boolean {
-    const group = this.groups.find(g => g.id === groupId);
-    if (!group) return false;
-    const index = group.members.indexOf(userId);
-    if (index === -1) return false;
-    group.members.splice(index, 1);
-    return true;
+  /**
+   * Añade un miembro al grupo
+   */
+  async addMember(groupId: number, email: string): Promise<boolean> {
+    try {
+      await firstValueFrom(this.post<void>(`/groups/${groupId}/members`, { email }));
+
+      this.invalidateCache();
+
+      return true;
+    } catch (error) {
+      console.error(`Error adding member to group ${groupId}:`, error);
+      return false;
+    }
   }
 
-  create(group: Omit<GroupData, 'id' | 'authorId'>): GroupData {
-    const currentUser = this.userService.getCurrentUser();
-    const authorId = currentUser?.id || 0;
-    const newGroup: GroupData = { ...group, id: this.nextId++, authorId, members: [authorId] };
-    this.groups.push(newGroup);
-    return newGroup;
+  /**
+   * Elimina un miembro del grupo
+   */
+  async removeMember(groupId: number, userId: number): Promise<boolean> {
+    try {
+      await firstValueFrom(this.delete<void>(`/groups/${groupId}/members/${userId}`));
+
+      this.invalidateCache();
+
+      return true;
+    } catch (error) {
+      console.error(`Error removing member from group ${groupId}:`, error);
+      return false;
+    }
   }
 
-  update(id: number, updated: Partial<GroupData>): boolean {
-    const index = this.groups.findIndex(g => g.id === id);
-    if (index === -1) return false;
-    this.groups[index] = { ...this.groups[index], ...updated };
-    return true;
+  /**
+   * Verifica si un usuario es miembro de un grupo
+   */
+  async isMember(userId: number, groupId: number): Promise<boolean> {
+    try {
+      const group = await this.getById(groupId);
+      return group?.members.includes(userId) || false;
+    } catch (error) {
+      console.error(`Error checking membership:`, error);
+      return false;
+    }
   }
 
-  delete(id: number): boolean {
-    const index = this.groups.findIndex(g => g.id === id);
-    if (index === -1) return false;
-    this.groups.splice(index, 1);
-    return true;
+  /**
+   * Verifica si un usuario es autor de un grupo
+   */
+  async isAuthor(userId: number, groupId: number): Promise<boolean> {
+    try {
+      const group = await this.getById(groupId);
+      return group?.authorId === userId;
+    } catch (error) {
+      console.error(`Error checking author:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Invalida la caché de grupos
+   */
+  private invalidateCache(): void {
+    this.groupsCache = null;
+    this.cacheTimestamp = 0;
+  }
+
+  /**
+   * Mapea la respuesta del backend al formato GroupData
+   */
+  private mapToGroupData(response: GroupResponseDto): GroupData {
+    return {
+      id: response.id,
+      name: response.name,
+      category: response.category,
+      level: response.level,
+      authorId: response.authorId,
+      members: response.members,
+      ticketCount: response.ticketCount,
+      createdAt: response.createdAt
+    };
+  }
+
+  /**
+   * Mapea un array de respuestas
+   */
+  private mapToGroupDataArray(responses: GroupResponseDto[]): GroupData[] {
+    return responses.map(r => this.mapToGroupData(r));
   }
 }

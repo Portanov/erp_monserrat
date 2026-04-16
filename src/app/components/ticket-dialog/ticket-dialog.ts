@@ -11,9 +11,11 @@ import { DatePickerModule } from 'primeng/datepicker';
 import { TagModule } from 'primeng/tag';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { AvatarModule } from 'primeng/avatar';
-import { TicketsService, Ticket, Priority, TicketStatus } from '../../services/tickets/tickets.service';
+import { TicketsService } from '../../services/tickets/tickets.service';
+import { Ticket, Priority, TicketStatus, CreateTicketDto, UpdateTicketDto } from '../../models/tickets/ticket.model';
 import { UserService } from '../../services/user/user.service';
 import { User } from '../../models/user/user.model';
+import { firstValueFrom } from 'rxjs';
 
 interface FilterOption {
   label: string;
@@ -41,7 +43,7 @@ interface FilterOption {
 })
 export class TicketDialogComponent implements OnInit, OnChanges {
   @Input() visible: boolean = false;
-  @Input() ticketId: string | null = null;
+  @Input() ticketId: number | null = null;
   @Input() groupId: number | null = null;
   @Output() visibleChange = new EventEmitter<boolean>();
   @Output() saved = new EventEmitter<Ticket>();
@@ -52,6 +54,7 @@ export class TicketDialogComponent implements OnInit, OnChanges {
   loading: boolean = false;
   saving: boolean = false;
   submitted: boolean = false;
+  currentUser: User | null = null;
 
   users: User[] = [];
 
@@ -83,32 +86,44 @@ export class TicketDialogComponent implements OnInit, OnChanges {
   };
 
   async ngOnInit() {
+    this.currentUser = this.userService.getCurrentUser();
     await this.loadUsers();
   }
 
-  ngOnChanges() {
+  async ngOnChanges() {
     if (this.visible && this.ticketId) {
-      this.loadTicket();
+      await this.loadTicket();
     } else if (this.visible && !this.ticketId) {
       this.resetForm();
     }
   }
 
   async loadUsers() {
-    this.users = await this.userService.getAll();
+    try {
+      this.users = await this.userService.getAll();
+    } catch (error) {
+      console.error('Error loading users:', error);
+      this.users = [];
+    }
   }
 
-  loadTicket() {
+  async loadTicket() {
     if (!this.ticketId) return;
 
     this.loading = true;
-    setTimeout(() => {
-      const ticket = this.ticketsService.getTicketById(this.ticketId!);
+    try {
+      const ticket = await firstValueFrom(this.ticketsService.getTicketById(this.ticketId));
       if (ticket) {
-        this.formData = { ...ticket };
+        this.formData = {
+          ...ticket,
+          dueDate: ticket.dueDate
+        };
       }
+    } catch (error) {
+      console.error('Error loading ticket:', error);
+    } finally {
       this.loading = false;
-    }, 500);
+    }
   }
 
   resetForm() {
@@ -123,45 +138,51 @@ export class TicketDialogComponent implements OnInit, OnChanges {
     this.submitted = false;
   }
 
-  save() {
+  async save() {
     this.submitted = true;
 
-    if (!this.formData.title || !this.formData.priority) {
+    if (!this.formData.title || !this.formData.priority || !this.currentUser || !this.groupId) {
       return;
     }
 
     this.saving = true;
 
-    setTimeout(() => {
-      try {
-        let savedTicket: Ticket;
+    try {
+      let savedTicket: Ticket;
 
-        if (this.ticketId) {
-          const existingTicket = this.ticketsService.getTicketById(this.ticketId!);
-          if (existingTicket) {
-            const updatedTicket = {
-              ...existingTicket,
-              ...this.formData
-            };
-            savedTicket = this.ticketsService.updateTicket(updatedTicket);
-          } else {
-            throw new Error('Ticket no encontrado');
-          }
-        } else {
-          savedTicket = this.ticketsService.createTicket({
-            ...this.formData,
-            groupId: this.groupId!
-          });
-        }
+      const ticketData: CreateTicketDto | UpdateTicketDto = {
+        title: this.formData.title,
+        description: this.formData.description || '',
+        status: 'pending',
+        priority: this.formData.priority as Priority,
+        assignedToId: this.formData.assignedToId || null,
+        dueDate: this.formData.dueDate,
+      };
 
-        this.saved.emit(savedTicket);
-        this.close();
-      } catch (error) {
-        console.error('Error al guardar ticket:', error);
-      } finally {
-        this.saving = false;
+      if (this.ticketId) {
+        savedTicket = await firstValueFrom(
+          this.ticketsService.updateTicket(this.ticketId, ticketData as UpdateTicketDto, this.currentUser.id)
+        );
+      } else {
+        savedTicket = await firstValueFrom(
+          this.ticketsService.createTicket(ticketData as CreateTicketDto, this.currentUser.id, this.groupId)
+        );
       }
-    }, 500);
+
+      this.saved.emit(savedTicket);
+      this.close();
+    } catch (error) {
+      console.error('Error al guardar ticket:', error);
+    } finally {
+      this.saving = false;
+    }
+  }
+
+  private formatDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   close() {

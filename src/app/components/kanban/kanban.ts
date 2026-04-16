@@ -1,15 +1,17 @@
-import { Component, OnInit, inject, Input, OnChanges, SimpleChanges, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, inject, Input, OnChanges, SimpleChanges, Output, EventEmitter, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DragDropModule } from 'primeng/dragdrop';
 import { PanelModule } from 'primeng/panel';
 import { CardModule } from 'primeng/card';
 import { BadgeModule } from 'primeng/badge';
-import { TicketsService, Ticket, TicketStatus } from '../../services/tickets/tickets.service';
+import { TicketsService } from '../../services/tickets/tickets.service';
+import { Ticket, TicketStatus, Priority } from '../../models/tickets/ticket.model';
 import { AlertService } from '../../services/alerts/alert.service';
 import { UserService } from '../../services/user/user.service';
 import { User } from '../../models/user/user.model';
 import { TicketDialogComponent } from '../ticket-dialog/ticket-dialog';
 import { CommentDialogComponent } from '../comment-dialog/comment-dialog';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-kanban',
@@ -26,22 +28,28 @@ import { CommentDialogComponent } from '../comment-dialog/comment-dialog';
   templateUrl: './kanban.html',
   styleUrls: ['./kanban.css'],
 })
-export class Kanban implements OnInit, OnChanges {
-  private ticketsService = inject(TicketsService);
+export class Kanban implements OnInit, OnChanges, OnDestroy {
+  private ticketService = inject(TicketsService);
   private alertService = inject(AlertService);
   private userService = inject(UserService);
 
   @Input() groupId: number | null = null;
   @Output() ticketMoved = new EventEmitter<void>();
 
+
   draggedTicket: Ticket | null = null;
   currentUser: User | null = null;
   showTicketDialog: boolean = false;
   showCommentDialog: boolean = false;
   selectedTicket: Ticket | null = null;
+  loading: boolean = false;
 
-  usersCache: Map<number, User> = new Map();
-  loadingUsers: Set<number> = new Set();
+
+  private ticketsCache: Map<string, Ticket[]> = new Map();
+  private userCache: Map<number, User> = new Map();
+  private cacheTimestamps: Map<string, number> = new Map();
+  private CACHE_DURATION_MS = 60000;
+  private isRefreshing = false;
 
   ticketsByStatus: Record<TicketStatus, Ticket[]> = {
     'pending': [],
@@ -61,12 +69,20 @@ export class Kanban implements OnInit, OnChanges {
 
   ngOnInit() {
     this.currentUser = this.userService.getCurrentUser();
+    console.log('Usuario actual:', this.currentUser);
     this.loadTickets();
   }
 
-  refresh() {
+  ngOnDestroy() {
+
+    this.ticketsCache.clear();
+    this.cacheTimestamps.clear();
+  }
+
+  async refresh() {
     console.log('Refrescando kanban manualmente...');
-    this.loadTickets();
+    this.invalidateTicketsCache();
+    await this.loadTickets();
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -76,29 +92,101 @@ export class Kanban implements OnInit, OnChanges {
     }
   }
 
-  private loadTickets() {
+  private async loadTickets() {
+    if (this.isRefreshing) return;
+
     Object.keys(this.ticketsByStatus).forEach(key => {
       this.ticketsByStatus[key as TicketStatus] = [];
     });
 
-    let tickets: Ticket[] = [];
+    this.loading = true;
+    this.isRefreshing = true;
 
-    if (this.groupId) {
-      tickets = this.ticketsService.getTicketsByGroup(this.groupId);
-      console.log(`Cargando tickets para el grupo ${this.groupId}:`, tickets.length);
-    } else {
-      tickets = this.ticketsService.currentGroupTickets();
-      console.log('Cargando todos los tickets del grupo actual:', tickets.length);
-    }
+    try {
+      let tickets: Ticket[] = [];
+      const cacheKey = this.groupId ? `group_${this.groupId}` : 'all_tickets';
 
-    tickets.forEach(ticket => {
-      if (this.ticketsByStatus[ticket.status]) {
-        this.ticketsByStatus[ticket.status].push(ticket);
+
+      if (this.isCacheValid(cacheKey)) {
+        tickets = this.ticketsCache.get(cacheKey) || [];
+        console.log(`✓ Tickets cargados desde caché (${cacheKey}):`, tickets.length);
+      } else {
+
+        if (this.groupId) {
+          tickets = await firstValueFrom(this.ticketService.getTicketsByGroup(this.groupId));
+          console.log(`Tickets cargados del servidor para el grupo ${this.groupId}:`, tickets.length);
+        } else {
+          tickets = await firstValueFrom(this.ticketService.getAllTickets());
+          console.log('Todos los tickets cargados del servidor:', tickets.length);
+        }
+
+
+        this.ticketsCache.set(cacheKey, tickets);
+        this.cacheTimestamps.set(cacheKey, Date.now());
       }
-    });
 
-    this.sortTicketsByPriority();
-    this.loadUsersFromTickets();
+
+      const uniqueTicketsMap = new Map<number, Ticket>();
+      tickets.forEach(ticket => {
+        if (!uniqueTicketsMap.has(ticket.id)) {
+          uniqueTicketsMap.set(ticket.id, ticket);
+        }
+      });
+
+      const uniqueTickets = Array.from(uniqueTicketsMap.values());
+
+      if (uniqueTickets.length !== tickets.length) {
+        console.warn(`⚠️ Se eliminaron ${tickets.length - uniqueTickets.length} tickets duplicados`);
+      }
+
+
+      const statusSet = new Map<TicketStatus, Set<number>>();
+
+      uniqueTickets.forEach(ticket => {
+        if (this.ticketsByStatus[ticket.status]) {
+          if (!statusSet.has(ticket.status)) {
+            statusSet.set(ticket.status, new Set());
+          }
+          statusSet.get(ticket.status)!.add(ticket.id);
+          this.ticketsByStatus[ticket.status].push(ticket);
+        }
+      });
+
+
+      Object.keys(this.ticketsByStatus).forEach(key => {
+        const status = key as TicketStatus;
+        const idSet = new Set<number>();
+        this.ticketsByStatus[status] = this.ticketsByStatus[status].filter(ticket => {
+          if (idSet.has(ticket.id)) {
+            console.warn(`🗑️ Ticket duplicado eliminado: ID ${ticket.id} en estado ${status}`);
+            return false;
+          }
+          idSet.add(ticket.id);
+          return true;
+        });
+      });
+
+      this.sortTicketsByPriority();
+      await this.loadUsersFromTickets();
+    } catch (error) {
+      console.error('Error loading tickets in kanban:', error);
+      this.alertService.error('Error', 'No se pudieron cargar los tickets');
+      this.invalidateTicketsCache();
+    } finally {
+      this.loading = false;
+      this.isRefreshing = false;
+    }
+  }
+
+  private isCacheValid(cacheKey: string): boolean {
+    const timestamp = this.cacheTimestamps.get(cacheKey);
+    if (!timestamp) return false;
+    return Date.now() - timestamp < this.CACHE_DURATION_MS;
+  }
+
+  private invalidateTicketsCache() {
+    this.ticketsCache.clear();
+    this.cacheTimestamps.clear();
   }
 
   private async loadUsersFromTickets() {
@@ -110,19 +198,24 @@ export class Kanban implements OnInit, OnChanges {
         if (ticket.createdById) userIds.add(ticket.createdById);
       });
     });
-    for (const userId of userIds) {
-      if (!this.usersCache.has(userId) && !this.loadingUsers.has(userId)) {
-        this.loadingUsers.add(userId);
-        try {
-          const user = await this.userService.getById(userId);
-          if (user) {
-            this.usersCache.set(userId, user);
-          }
-        } catch (error) {
-          console.error(`Error loading user ${userId}:`, error);
-        } finally {
-          this.loadingUsers.delete(userId);
+
+    const usersToLoad = Array.from(userIds).filter(id => !this.userCache.has(id));
+
+    if (usersToLoad.length === 0) {
+      console.log('✓ Todos los usuarios ya están en caché');
+      return;
+    }
+
+    console.log(`Cargando ${usersToLoad.length} usuarios del servidor...`);
+
+    for (const userId of usersToLoad) {
+      try {
+        const user = await this.userService.getById(userId);
+        if (user) {
+          this.userCache.set(userId, user);
         }
+      } catch (error) {
+        console.error(`Error loading user ${userId}:`, error);
       }
     }
   }
@@ -130,56 +223,64 @@ export class Kanban implements OnInit, OnChanges {
   getUserName(userId: number | null): string {
     if (!userId) return 'Sin asignar';
 
-    const user = this.usersCache.get(userId);
-
+    const user = this.userCache.get(userId);
     if (user) {
       return user.fullName || user.username || 'Usuario';
     }
 
-    if (!this.loadingUsers.has(userId)) {
-      this.userService.getById(userId).then(user => {
+    this.userService.getById(userId)
+      .then(user => {
         if (user) {
-          this.usersCache.set(userId, user);
-          this.loadTickets();
+          this.userCache.set(userId, user);
         }
-      }).catch(error => {
+      })
+      .catch(error => {
         console.error(`Error loading user ${userId}:`, error);
       });
-    }
 
     return 'Cargando...';
   }
 
   private sortTicketsByPriority() {
-    const priorityOrder = ['crítica', 'urgente', 'alta', 'media', 'normal', 'baja', 'opcional'];
+    const priorityOrder: Record<Priority, number> = {
+      'crítica': 1,
+      'urgente': 2,
+      'alta': 3,
+      'media': 4,
+      'normal': 5,
+      'baja': 6,
+      'opcional': 7
+    };
 
     Object.keys(this.ticketsByStatus).forEach(key => {
       const status = key as TicketStatus;
       this.ticketsByStatus[status].sort((a, b) => {
-        const priorityA = priorityOrder.indexOf(a.priority);
-        const priorityB = priorityOrder.indexOf(b.priority);
-        return priorityA - priorityB;
+        return (priorityOrder[a.priority] || 5) - (priorityOrder[b.priority] || 5);
       });
     });
   }
 
   canMoveTicket(ticket: Ticket): boolean {
     if (!this.currentUser) return false;
-    return ticket.assignedToId === this.currentUser.id;
+    return Number(ticket.assignedToId) === this.currentUser.id;
   }
 
   canEditTicket(ticket: Ticket): boolean {
     if (!this.currentUser) return false;
-    return ticket.createdById === this.currentUser.id;
+    return Number(ticket.createdById) === this.currentUser.id;
   }
 
   canViewComments(ticket: Ticket): boolean {
     if (!this.currentUser) return false;
-    return ticket.assignedToId === this.currentUser.id || ticket.createdById === this.currentUser.id;
+    return Number(ticket.assignedToId) === this.currentUser.id || Number(ticket.createdById) === this.currentUser.id;
   }
 
   dragStart(ticket: Ticket) {
-    if (this.canMoveTicket(ticket)) {
+    if (!this.currentUser) {
+      this.alertService.error('Error', 'Usuario no authenticado');
+      return;
+    }
+    if (Number(ticket.assignedToId) === this.currentUser.id) {
       this.draggedTicket = ticket;
     } else {
       this.alertService.warn('Sin permisos', 'Solo puedes mover tickets que te están asignados');
@@ -190,32 +291,41 @@ export class Kanban implements OnInit, OnChanges {
     this.draggedTicket = null;
   }
 
-  onDrop(status: TicketStatus) {
+  async onDrop(status: TicketStatus) {
+    if (!this.currentUser) {
+      this.alertService.error('Error', 'Usuario no authenticado');
+      return;
+    }
     if (this.draggedTicket && this.draggedTicket.status !== status) {
       try {
-        if (!this.canMoveTicket(this.draggedTicket)) {
+        if (Number(this.draggedTicket.assignedToId) !== this.currentUser.id) {
           this.alertService.warn('Sin permisos', 'No tienes permisos para mover este ticket');
           this.draggedTicket = null;
           return;
         }
 
-        const updatedTicket = this.ticketsService.changeTicketStatus(
-          this.draggedTicket.id,
-          status
-        );
+        const userId = this.currentUser.id;
+        const ticketId = this.draggedTicket.id;
+
+        await firstValueFrom(this.ticketService.changeTicketStatus(ticketId, status, userId));
 
         this.alertService.success(
           'Ticket movido',
-          `Ticket ${this.draggedTicket.id} movido a ${this.getStatusLabel(status)}`
+          `Ticket ${ticketId} movido a ${this.getStatusLabel(status)}`
         );
-        this.loadTickets();
+
+        this.invalidateTicketsCache();
+        await this.loadTickets();
         this.ticketMoved.emit();
       } catch (error) {
-        this.alertService.error('Error', 'Ha ocurrido un error al mover el ticket');
         console.error('Error moving ticket:', error);
+        this.alertService.error('Error', 'Ha ocurrido un error al mover el ticket');
+      } finally {
+        this.draggedTicket = null;
       }
+    } else {
+      this.draggedTicket = null;
     }
-    this.draggedTicket = null;
   }
 
   onDragOver(event: Event) {
@@ -223,7 +333,7 @@ export class Kanban implements OnInit, OnChanges {
   }
 
   openEditTicket(ticket: Ticket) {
-    if (this.canEditTicket(ticket)) {
+    if (ticket.createdById == this.currentUser?.id) {
       this.selectedTicket = ticket;
       this.showTicketDialog = true;
     } else {
@@ -232,7 +342,7 @@ export class Kanban implements OnInit, OnChanges {
   }
 
   openCommentDialog(ticket: Ticket) {
-    if (this.canViewComments(ticket)) {
+    if (ticket.createdById == this.currentUser?.id || ticket.assignedToId == this.currentUser?.id) {
       this.selectedTicket = ticket;
       this.showCommentDialog = true;
     } else {
@@ -240,33 +350,42 @@ export class Kanban implements OnInit, OnChanges {
     }
   }
 
-  onTicketSaved(ticket: Ticket) {
-    this.loadTickets();
+  async onTicketSaved(ticket: Ticket) {
+    this.invalidateTicketsCache();
+    await this.loadTickets();
     this.showTicketDialog = false;
     this.selectedTicket = null;
+    this.ticketMoved.emit();
   }
 
-  onCommentAdded(comment: any) {
-    this.loadTickets();
+  async onCommentAdded(comment: any) {
+    this.invalidateTicketsCache();
+    await this.loadTickets();
     this.showCommentDialog = false;
     this.selectedTicket = null;
   }
 
   getStatusLabel(status: TicketStatus): string {
-    return this.ticketsService.getStatusLabel(status);
+    return this.ticketService.getStatusLabel(status);
   }
 
-  getPrioritySeverity(priority: string): string {
-    return this.ticketsService.getPrioritySeverity(priority as any);
+  getPrioritySeverity(priority: Priority): string {
+    return this.ticketService.getPrioritySeverity(priority);
   }
 
-  isOverdue(dueDate: Date | null): boolean {
+  isOverdue(dueDate: string | null): boolean {
     if (!dueDate) return false;
-    return new Date(dueDate) < new Date();
+    const dueDateTime = new Date(dueDate).getTime();
+    const nowTime = new Date().getTime();
+    const dueDateAtMidnight = new Date(dueDateTime);
+    dueDateAtMidnight.setHours(0, 0, 0, 0);
+    const todayAtMidnight = new Date(nowTime);
+    todayAtMidnight.setHours(0, 0, 0, 0);
+    return dueDateAtMidnight < todayAtMidnight;
   }
 
   getStatusColor(status: TicketStatus): string {
-    const colors = {
+    const colors: Record<TicketStatus, string> = {
       'pending': 'blue',
       'in-progress': 'yellow',
       'review': 'purple',
@@ -276,20 +395,20 @@ export class Kanban implements OnInit, OnChanges {
     return colors[status];
   }
 
-  getPriorityClass(priority: string): string {
-    const classes = {
-      'alta': 'border border-red-600 text-red-600',
-      'urgente': 'border border-orange-600 text-orange-600',
-      'crítica': 'border border-red-300 text-red-300',
-      'media': 'border border-yellow-600 text-yellow-600',
-      'normal': 'border border-blue-400 text-blue-400',
-      'baja': 'border border-green-400 text-green-400',
-      'opcional': 'border border-gray-400 text-gray-400'
+  getPriorityClass(priority: Priority): string {
+    const classes: Record<Priority, string> = {
+      'alta': 'border border-red-600 text-red-600 bg-red-50',
+      'urgente': 'border border-orange-600 text-orange-600 bg-orange-50',
+      'crítica': 'border border-red-800 text-red-800 bg-red-100',
+      'media': 'border border-yellow-600 text-yellow-600 bg-yellow-50',
+      'normal': 'border border-blue-400 text-blue-400 bg-blue-50',
+      'baja': 'border border-green-400 text-green-400 bg-green-50',
+      'opcional': 'border border-gray-400 text-gray-400 bg-gray-50'
     };
-    return classes[priority as keyof typeof classes] || 'border border-gray-400 text-gray-400';
+    return classes[priority] || classes['normal'];
   }
 
-  trackByTicketId(index: number, ticket: Ticket): string {
+  trackByTicketId(index: number, ticket: Ticket): number {
     return ticket.id;
   }
 }

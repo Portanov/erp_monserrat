@@ -80,7 +80,7 @@
           <span class="font-medium">{{ticket.title}}</span>
         </td>
         <td>
-          @if (ticket.assignedToId === usuario?.id) {
+          @if (canEditStatus(ticket)) {
           <div [pEditableColumn]="ticket.status" (onEditComplete)="onStatusEditComplete($event, ticket)">
             <p-cellEditor>
               <ng-template #input>
@@ -132,11 +132,11 @@
           }
         </td>
         <td>
-          @if (ticket.createdById === usuario?.id ) {
+          @if (canEditTicket(ticket)) {
             <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" (click)="openEditTicket(ticket)"/>
             <p-button icon="pi pi-comment" [rounded]="true" [text]="true" severity="info" (onClick)="openCommentDialog(ticket)"/>
             <p-button icon="pi pi-history" [rounded]="true" [text]="true" severity="secondary" />
-          } @else if (ticket.assignedToId === usuario?.id) {
+          } @else if (canCommentTicket(ticket)) {
             <p-button icon="pi pi-comment" [rounded]="true" [text]="true" severity="info" (onClick)="openCommentDialog(ticket)" />
             <p-button icon="pi pi-history" [rounded]="true" [text]="true" severity="secondary" />
           }

@@ -83,6 +83,30 @@ export class UserService extends GatewayBaseService {
   }
 
   /**
+   * Obtener la informacion basica
+   */
+  async getBasicUser(id: number): Promise<User | null> {
+    try {
+      return await firstValueFrom(this.get<User>(`/users/basic/${id}`));
+    } catch (error) {
+      console.error(`Error fetching user ${id}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Obtener la informacion basica
+   */
+  async getByBasicEmail(email: string): Promise<User | null> {
+    try {
+      return await firstValueFrom(this.get<User>(`/users/byemail/${email}`));
+    } catch (error) {
+      console.error(`Error fetching user ${email}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Obtiene un usuario por username
    */
   async getByUsername(username: string): Promise<User | null> {
@@ -153,14 +177,9 @@ export class UserService extends GatewayBaseService {
    * Actualiza el estado de un usuario (activo/inactivo)
    */
   async updateStatus(id: number, status: boolean): Promise<User | null> {
-    try {
-      const updatedUser = await firstValueFrom(this.patch<User>(`/users/${id}/status`, { status }));
-
-      return updatedUser;
-    } catch (error) {
-      console.error(`Error updating status for user ${id}:`, error);
-      return null;
-    }
+    return await firstValueFrom(
+      this.put<User>(`/users/${id}/status`, { status })
+    );
   }
 
   /**
@@ -194,11 +213,11 @@ export class UserService extends GatewayBaseService {
         username: response.user.username,
         email: response.user.email,
         fullName: response.user.fullName,
-        phone: '',
-        address: '',
-        birthDate: null,
-        status: true,
-        created_at: new Date().toISOString()
+        phone: response.user.phone || '',
+        address: response.user.address || '',
+        birthDate: response.user.birthDate || '',
+        status: response.user.status,
+        created_at: response.user.created_at || new Date().toISOString()
       };
 
       const token = response.token;

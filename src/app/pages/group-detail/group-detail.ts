@@ -1,10 +1,10 @@
-import { Component, OnInit, inject, signal, ViewChild, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, ViewChild, computed, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Table } from 'primeng/table';
 import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
-import { TicketsService, Ticket, TicketStatus } from '../../services/tickets/tickets.service';
+import { TicketsService } from '../../services/tickets/tickets.service';
+import { Ticket, TicketStatus, Priority } from '../../models/tickets/ticket.model';
 import { GroupService } from '../../services/group/group.service';
 import { UserService } from '../../services/user/user.service';
 import { TabsModule } from 'primeng/tabs';
@@ -18,6 +18,9 @@ import { DataViewModule } from 'primeng/dataview';
 import { HasGroupPermissionDirective } from '../../directives/permissions-group/has-group-permission.directive';
 import { GroupConfigComponent } from '../../components/group-config/group-config.component';
 import { User } from '../../models/user/user.model';
+import { GroupData } from '../../models/groups/groups.model';
+import { Subject, takeUntil } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-group-detail',
@@ -40,7 +43,7 @@ import { User } from '../../models/user/user.model';
   templateUrl: './group-detail.html',
   styleUrls: ['./group-detail.css']
 })
-export class GroupDetail implements OnInit {
+export class GroupDetail implements OnInit, OnDestroy {
   @ViewChild(Kanban) kanbanComponent!: Kanban;
   @ViewChild(TicketTable) ticketTableComponent!: TicketTable;
 
@@ -50,20 +53,20 @@ export class GroupDetail implements OnInit {
   private groupService = inject(GroupService);
   private userService = inject(UserService);
 
-  private usersCache: Map<number, User> = new Map();
-  private loadingUsers: Set<number> = new Set();
+  private destroy$ = new Subject<void>();
+  private userCache: Map<number, User> = new Map();
+
   groupId: number = 0;
-  groupInfo: any = null;
+  groupInfo: GroupData | null = null;
   tickets = signal<Ticket[]>([]);
   recentTickets = signal<Ticket[]>([]);
   loading = signal(false);
   searchValue = signal('');
   kanban: boolean = false;
   showTicketDialog: boolean = false;
-  selectedTicketId: string | null = null;
+  selectedTicketId: number | null = null;
   currentUser = this.userService.currentUser;
   currentUserId = computed(() => this.currentUser()?.id);
-  
 
   ticketStats = {
     pending: 0,
@@ -84,42 +87,57 @@ export class GroupDetail implements OnInit {
   selectedStatus: TicketStatus | null = null;
 
   ngOnInit() {
-    this.route.params.subscribe(params => {
+    this.route.params.pipe(takeUntil(this.destroy$)).subscribe(async params => {
       this.groupId = +params['id'];
       if (this.groupId) {
-        this.loadGroupInfo();
-        this.loadTickets();
+        await this.loadGroupInfo();
+        await this.loadTickets();
       }
     });
   }
 
-  private async loadGroupInfo() {
-    const groups = this.groupService.getAll();
-    this.groupInfo = groups.find(g => g.id === this.groupId);
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
 
-    if (this.groupInfo?.authorId) {
-      await this.ensureUserLoaded(this.groupInfo.authorId);
+  private async loadGroupInfo() {
+    try {
+      const group = await this.groupService.getById(this.groupId);
+      this.groupInfo = group;
+
+      if (this.groupInfo?.authorId) {
+        await this.ensureUserLoaded(this.groupInfo.authorId);
+      }
+    } catch (error) {
+      console.error('Error loading group info:', error);
     }
   }
 
   private async loadTickets() {
     this.loading.set(true);
-    setTimeout(async () => {
-      const groupTickets = this.ticketsService.getTicketsByGroup(this.groupId!);
+    try {
+      // Cargar tickets del grupo usando Observable convertido a Promise
+      const groupTickets = await firstValueFrom(this.ticketsService.getTicketsByGroup(this.groupId));
       console.log('Tickets cargados en group-detail:', groupTickets.length);
       this.tickets.set(groupTickets);
+
       await this.loadUsersFromTickets(groupTickets);
 
       this.calculateStats();
       this.loadRecentTickets();
+    } catch (error) {
+      console.error('Error loading tickets:', error);
+    } finally {
       this.loading.set(false);
-    }, 500);
+    }
   }
 
   private async loadUsersFromTickets(tickets: Ticket[]) {
     const userIds = new Set<number>();
     tickets.forEach(ticket => {
       if (ticket.assignedToId) userIds.add(ticket.assignedToId);
+      if (ticket.createdById) userIds.add(ticket.createdById);
     });
 
     for (const userId of userIds) {
@@ -128,18 +146,15 @@ export class GroupDetail implements OnInit {
   }
 
   private async ensureUserLoaded(userId: number): Promise<void> {
-    if (this.usersCache.has(userId) || this.loadingUsers.has(userId)) return;
+    if (this.userCache.has(userId)) return;
 
-    this.loadingUsers.add(userId);
     try {
       const user = await this.userService.getById(userId);
       if (user) {
-        this.usersCache.set(userId, user);
+        this.userCache.set(userId, user);
       }
     } catch (error) {
       console.error(`Error loading user ${userId}:`, error);
-    } finally {
-      this.loadingUsers.delete(userId);
     }
   }
 
@@ -157,9 +172,11 @@ export class GroupDetail implements OnInit {
 
   private loadRecentTickets() {
     const currentTickets = this.tickets();
-    const sorted = [...currentTickets].sort((a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    const sorted = [...currentTickets].sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateB - dateA;
+    });
     this.recentTickets.set(sorted.slice(0, 3));
   }
 
@@ -168,13 +185,13 @@ export class GroupDetail implements OnInit {
     this.showTicketDialog = true;
   }
 
-  onTicketSaved(ticket: Ticket) {
+  async onTicketSaved(ticket: Ticket) {
     console.log('Ticket guardado en group-detail:', ticket);
     this.showTicketDialog = false;
-    this.loadTickets();
+    await this.loadTickets();
     setTimeout(() => {
       this.refreshCurrentView();
-    }, 600);
+    }, 300);
   }
 
   goToGroups() {
@@ -184,7 +201,7 @@ export class GroupDetail implements OnInit {
   private refreshCurrentView() {
     console.log('Refrescando vista actual, modo kanban:', this.kanban);
 
-    if (!this.kanban) {
+    if (this.kanban) {
       if (this.kanbanComponent) {
         console.log('Refrescando kanban component...');
         this.kanbanComponent.refresh();
@@ -201,9 +218,9 @@ export class GroupDetail implements OnInit {
     }
   }
 
-  onTicketMoved() {
+  async onTicketMoved() {
     console.log('Ticket movido, recargando estadísticas...');
-    this.loadTickets();
+    await this.loadTickets();
   }
 
   onViewChanged() {
@@ -215,31 +232,36 @@ export class GroupDetail implements OnInit {
 
   getUserName(userId: number | null): string {
     if (!userId) return 'Sin asignar';
-    const user = this.usersCache.get(userId);
-    return user ? user.username : 'Desconocido';
+    const user = this.userCache.get(userId);
+    return user ? (user.fullName || user.username || 'Usuario') : 'Cargando...';
   }
 
-  getPriorityClass(priority: string): string {
-    const classes = {
-      'alta': 'border border-red-600 text-red-600',
-      'urgente': 'border border-orange-600 text-orange-600',
-      'crítica': 'border border-red-300 text-red-300',
-      'media': 'border border-yellow-600 text-yellow-600',
-      'normal': 'border border-blue-400 text-blue-400',
-      'baja': 'border border-green-400 text-green-400',
-      'opcional': 'border border-gray-400 text-gray-400'
+  getPriorityClass(priority: Priority | string): string {
+    const classes: Record<string, string> = {
+      'alta': 'border border-red-600 text-red-600 bg-red-50',
+      'urgente': 'border border-orange-600 text-orange-600 bg-orange-50',
+      'crítica': 'border border-red-800 text-red-800 bg-red-100',
+      'media': 'border border-yellow-600 text-yellow-600 bg-yellow-50',
+      'normal': 'border border-blue-400 text-blue-400 bg-blue-50',
+      'baja': 'border border-green-400 text-green-400 bg-green-50',
+      'opcional': 'border border-gray-400 text-gray-400 bg-gray-50'
     };
-    return classes[priority as keyof typeof classes] || 'border border-gray-400 text-gray-400';
+    return classes[priority] || classes['normal'];
   }
 
-  getStatusColor(status: string): string {
-    const colors = {
+  getStatusColor(status: TicketStatus): string {
+    const colors: Record<TicketStatus, string> = {
       'pending': 'blue',
       'in-progress': 'yellow',
       'review': 'purple',
       'done': 'green',
       'blocked': 'red'
     };
-    return colors[status as keyof typeof colors] || 'gray';
+    return colors[status] || 'gray';
+  }
+
+  // Método para refrescar desde el template
+  async refresh() {
+    await this.loadTickets();
   }
 }

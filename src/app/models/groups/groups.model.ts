@@ -13,6 +13,7 @@ export interface CreateGroupDto {
     name: string;
     category: string;
     level: string;
+    authorId: number;
 }
 
 export interface UpdateGroupDto {

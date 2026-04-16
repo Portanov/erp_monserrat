@@ -1,6 +1,7 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { UserService } from '../user/user.service';
-import { GroupService, GroupData } from '../group/group.service';
+import { GroupService } from '../group/group.service';
+import { GroupData } from '../../models/groups/groups.model';
 
 export interface GroupPermissions {
   createTicket: boolean;
@@ -56,6 +57,8 @@ const GROUP_PERMISSIONS_LABELS: { [key: string]: string } = {
 export class GroupPermissionService {
   private userService = inject(UserService);
   private groupService = inject(GroupService);
+
+  private groupsCache: Map<number, GroupData> = new Map();
 
   private groupPermissions = signal<UserGroupPermissions>({
     7: { // Usuario admin
@@ -153,17 +156,51 @@ export class GroupPermissionService {
   }
 
   /**
+   * Metodo para obtener grupo con cache
+   */
+  private async getGroup(groupId: number): Promise<GroupData | undefined> {
+    if (this.groupsCache.has(groupId)) {
+      return this.groupsCache.get(groupId);
+    }
+
+    try {
+      const group = await this.groupService.getById(groupId);
+      if (group) {
+        this.groupsCache.set(groupId, group);
+        return group;
+      }
+      return undefined;
+    } catch (error) {
+      console.error(`Error loading group ${groupId}:`, error);
+      return undefined;
+    }
+  }
+
+  // 🔥 MODIFICADO: Verificación de membresía usando servicio async
+  private async isMemberOfGroup(userId: number, groupId: number): Promise<boolean> {
+    try {
+      const group = await this.getGroup(groupId);
+      return group?.members.includes(userId) || false;
+    } catch (error) {
+      console.error(`Error checking membership:`, error);
+      return false;
+    }
+  }
+
+  /**
    * Verifica si el usuario actual tiene un permiso específico en un grupo
    * Los miembros siempre tienen viewTicket = true
    */
-  hasGroupPermission(groupId: number, permission: string): boolean {
+  async hasGroupPermission(groupId: number, permission: string): Promise<boolean> {
     const currentUser = this.userService.currentUser();
     if (!currentUser) return false;
-    const group = this.groupService.getAll().find(g => g.id === groupId);
-    const isMember = group?.members.includes(currentUser.id) || false;
+
+    const isMember = await this.isMemberOfGroup(currentUser.id, groupId);
+
     if (isMember && permission === 'viewTicket') {
       return true;
     }
+
     const userPerms = this.groupPermissions()[currentUser.id];
     if (!userPerms) return false;
     const groupPerms = userPerms[groupId.toString()];
@@ -174,29 +211,40 @@ export class GroupPermissionService {
   /**
    * Verifica si el usuario actual tiene todos los permisos especificados
    */
-  hasAllGroupPermissions(groupId: number, permissions: string[]): boolean {
-    return permissions.every(permission => this.hasGroupPermission(groupId, permission));
+  async hasAllGroupPermissions(groupId: number, permissions: string[]): Promise<boolean> {
+    for (const permission of permissions) {
+      if (!(await this.hasGroupPermission(groupId, permission))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
    * Verifica si el usuario actual tiene al menos uno de los permisos especificados
    */
-  hasAnyGroupPermission(groupId: number, permissions: string[]): boolean {
-    return permissions.some(permission => this.hasGroupPermission(groupId, permission));
+  async hasAnyGroupPermission(groupId: number, permissions: string[]): Promise<boolean> {
+    for (const permission of permissions) {
+      if (await this.hasGroupPermission(groupId, permission)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
    * Obtiene todos los permisos del usuario actual en un grupo
    */
-  getGroupPermissions(groupId: number): GroupPermissions | null {
+  async getGroupPermissions(groupId: number): Promise<GroupPermissions | null> {
     const currentUser = this.userService.currentUser();
     if (!currentUser) return null;
+
+    const isMember = await this.isMemberOfGroup(currentUser.id, groupId);
     const userPerms = this.groupPermissions()[currentUser.id];
     if (!userPerms) return null;
     const groupPerms = userPerms[groupId.toString()];
     if (!groupPerms) return null;
-    const group = this.groupService.getAll().find(g => g.id === groupId);
-    const isMember = group?.members.includes(currentUser.id) || false;
+
     if (isMember && groupPerms) {
       return { ...groupPerms, viewTicket: true };
     }
@@ -206,17 +254,16 @@ export class GroupPermissionService {
   /**
    * Obtiene los permisos de un usuario específico en un grupo
    */
-  getUserGroupPermissions(userId: number, groupId: number): GroupPermissions | null {
+  async getUserGroupPermissions(userId: number, groupId: number): Promise<GroupPermissions | null> {
+    const isMember = await this.isMemberOfGroup(userId, groupId);
     const userPerms = this.groupPermissions()[userId];
     if (!userPerms) return null;
     const groupPerms = userPerms[groupId.toString()];
     if (!groupPerms) return null;
-    const group = this.groupService.getAll().find(g => g.id === groupId);
-    const isMember = group?.members.includes(userId) || false;
+
     if (isMember && groupPerms) {
       return { ...groupPerms, viewTicket: true };
     }
-
     return groupPerms;
   }
 
@@ -243,7 +290,6 @@ export class GroupPermissionService {
 
   /**
    * Inicializa permisos por defecto para un usuario en un grupo
-   * Los miembros siempre tienen viewTicket = true
    */
   initializeGroupPermissions(userId: number, groupId: number, isMember: boolean = true): void {
     const defaultPermissions: Partial<GroupPermissions> = {};
@@ -331,22 +377,23 @@ export class GroupPermissionService {
 
   /**
    * Obtiene todos los grupos a los que un usuario tiene acceso
+   * 🔥 MODIFICADO: Ahora es async
    */
-  getUserGroups(userId: number): { group: GroupData; permissions: GroupPermissions }[] {
+  async getUserGroups(userId: number): Promise<{ group: GroupData; permissions: GroupPermissions }[]> {
     const result: { group: GroupData; permissions: GroupPermissions }[] = [];
     const userPerms = this.groupPermissions()[userId];
 
     if (userPerms) {
-      Object.keys(userPerms).forEach(groupId => {
+      for (const groupId of Object.keys(userPerms)) {
         const groupIdNum = parseInt(groupId);
-        const group = this.groupService.getAll().find(g => g.id === groupIdNum);
+        const group = await this.getGroup(groupIdNum);
         if (group) {
           result.push({
             group,
             permissions: userPerms[groupId]
           });
         }
-      });
+      }
     }
 
     return result;
@@ -355,60 +402,58 @@ export class GroupPermissionService {
   /**
    * Verifica si el usuario puede ver tickets (siempre true para miembros)
    */
-  canViewTickets(groupId: number): boolean {
+  async canViewTickets(groupId: number): Promise<boolean> {
     const currentUser = this.userService.currentUser();
     if (!currentUser) return false;
 
-    const group = this.groupService.getAll().find(g => g.id === groupId);
-    const isMember = group?.members.includes(currentUser.id) || false;
-
-    return isMember || this.hasGroupPermission(groupId, 'viewTicket');
+    const isMember = await this.isMemberOfGroup(currentUser.id, groupId);
+    return isMember || await this.hasGroupPermission(groupId, 'viewTicket');
   }
 
   /**
    * Verifica si el usuario actual puede administrar un grupo
    */
-  canManageGroup(groupId: number): boolean {
-    const group = this.groupService.getAll().find(g => g.id === groupId);
+  async canManageGroup(groupId: number): Promise<boolean> {
+    const group = await this.getGroup(groupId);
     const currentUser = this.userService.currentUser();
 
     if (!group || !currentUser) return false;
 
     return group.authorId === currentUser.id ||
-      this.hasGroupPermission(groupId, 'manageGroupPrivileges');
+      await this.hasGroupPermission(groupId, 'manageGroupPrivileges');
   }
 
   /**
    * Verifica si el usuario actual puede editar la configuración del grupo
    */
-  canEditGroupSettings(groupId: number): boolean {
-    const group = this.groupService.getAll().find(g => g.id === groupId);
+  async canEditGroupSettings(groupId: number): Promise<boolean> {
+    const group = await this.getGroup(groupId);
     const currentUser = this.userService.currentUser();
 
     if (!group || !currentUser) return false;
 
     return group.authorId === currentUser.id ||
-      this.hasGroupPermission(groupId, 'editGroupSettings');
+      await this.hasGroupPermission(groupId, 'editGroupSettings');
   }
 
   /**
    * Verifica si el usuario actual puede eliminar el grupo
    */
-  canDeleteGroup(groupId: number): boolean {
-    const group = this.groupService.getAll().find(g => g.id === groupId);
+  async canDeleteGroup(groupId: number): Promise<boolean> {
+    const group = await this.getGroup(groupId);
     const currentUser = this.userService.currentUser();
 
     if (!group || !currentUser) return false;
 
     return group.authorId === currentUser.id ||
-      this.hasGroupPermission(groupId, 'deleteGroup');
+      await this.hasGroupPermission(groupId, 'deleteGroup');
   }
 
   /**
    * Obtiene un resumen de permisos para un grupo
    */
-  getPermissionsSummary(groupId: number): { granted: string[]; missing: string[] } {
-    const permissions = this.getGroupPermissions(groupId);
+  async getPermissionsSummary(groupId: number): Promise<{ granted: string[]; missing: string[] }> {
+    const permissions = await this.getGroupPermissions(groupId);
     if (!permissions) {
       return {
         granted: [],

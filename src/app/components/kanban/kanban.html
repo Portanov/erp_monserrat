@@ -18,7 +18,7 @@
           </div>
         </ng-template>
 
-        <div class="tickets-container space-y-3 min-h-[300px] max-h-[500px] overflow-y-auto p-1">
+        <div class="tickets-container space-y-3 min-h-75 max-h-125 overflow-y-auto p-1">
           @for (ticket of ticketsByStatus[config.status]; track trackByTicketId($index, ticket)) {
           <div pDraggable (onDragStart)="dragStart(ticket)" (onDragEnd)="dragEnd()" draggable="true"
             [class.cursor-move]="canMoveTicket(ticket)" [class.cursor-not-allowed]="!canMoveTicket(ticket)"
@@ -59,7 +59,7 @@
                 </div>
 
                 <div class="mt-3 flex justify-end gap-2 border-t border-gray-700 pt-2">
-                  @if (canViewComments(ticket)) {
+                  @if (ticket.createdById == this.currentUser?.id || ticket.assignedToId == this.currentUser?.id) {
                   <button pButton type="button" class="p-button-rounded p-button-text p-button-sm"
                     [class]="ticket.comments.length > 0 ? 'text-blue-400' : 'text-gray-500'"
                     (click)="openCommentDialog(ticket)">
@@ -70,7 +70,7 @@
                   </button>
                   }
 
-                  @if (canEditTicket(ticket)) {
+                  @if (ticket.createdById == this.currentUser?.id) {
                   <button pButton type="button" class="p-button-rounded p-button-text p-button-sm text-yellow-400"
                     (click)="openEditTicket(ticket)">
                     <i class="pi pi-pencil"></i>

@@ -13,7 +13,8 @@ import { TooltipModule } from 'primeng/tooltip';
 import { ToastModule } from 'primeng/toast';
 import { SelectModule } from 'primeng/select';
 import { MenuItem} from 'primeng/api';
-import { GroupService, GroupData } from '../../services/group/group.service';
+import { GroupService } from '../../services/group/group.service';
+import { GroupData } from '../../models/groups/groups.model';
 import { UserService } from '../../services/user/user.service';
 import { User } from '../../models/user/user.model';
 import { GroupPermissionService, GroupPermissions } from './../../services/group_permissions/group-permissions.service';
@@ -103,9 +104,6 @@ import { AlertService } from '../../services/alerts/alert.service';
             <th pSortableColumn="email">
               Email <p-sortIcon field="email" />
             </th>
-            <th pSortableColumn="role">
-              Rol <p-sortIcon field="role" />
-            </th>
             <th style="width: 80px">Acciones</th>
           </tr>
         </ng-template>
@@ -123,13 +121,6 @@ import { AlertService } from '../../services/alerts/alert.service';
               {{ member.fullName }}
             </td>
             <td>{{ member.email }}</td>
-            <td>
-              <span
-                class="px-2 py-1 rounded-full text-xs font-semibold"
-                [class]="getRoleClass(getMemberRole(member.id))">
-                {{ getMemberRole(member.id) }}
-              </span>
-            </td>
             <td>
               <!-- Botón con menú tiered -->
               <div class="relative inline-block">
@@ -181,7 +172,7 @@ import { AlertService } from '../../services/alerts/alert.service';
         [style]="{ width: '450px' }"
         [draggable]="false">
 
-        <div class="p-fluid">
+        <div class="">
           <div class="field mb-4">
             <label for="email" class="font-semibold mb-2 block">Email del usuario</label>
             <input
@@ -189,20 +180,7 @@ import { AlertService } from '../../services/alerts/alert.service';
               type="email"
               pInputText
               [(ngModel)]="newMemberEmail"
-              placeholder="usuario@ejemplo.com">
-          </div>
-
-          <div class="field mb-4">
-            <label for="role" class="font-semibold mb-2 block">Rol asignado</label>
-            <p-select
-              id="role"
-              [(ngModel)]="newMemberRole"
-              [options]="roleOptions"
-              optionLabel="label"
-              optionValue="value"
-              placeholder="Seleccionar rol"
-              styleClass="w-full">
-            </p-select>
+              placeholder="usuario@ejemplo.com" fluid>
           </div>
         </div>
 
@@ -297,14 +275,6 @@ import { AlertService } from '../../services/alerts/alert.service';
                 </div>
                 <div class="flex align-items-center">
                   <p-checkbox
-                    [(ngModel)]="memberPermissions.editMemberRole"
-                    binary="true"
-                    inputId="editMemberRole">
-                  </p-checkbox>
-                  <label for="editMemberRole" class="ml-2">Editar Roles</label>
-                </div>
-                <div class="flex align-items-center">
-                  <p-checkbox
                     [(ngModel)]="memberPermissions.viewMembers"
                     binary="true"
                     inputId="viewMembers"
@@ -342,14 +312,6 @@ import { AlertService } from '../../services/alerts/alert.service';
                   </p-checkbox>
                   <label for="manageGroupPrivileges" class="ml-2">Gestionar Privilegios</label>
                 </div>
-              </div>
-            </p-fieldset>
-            <p-fieldset legend="Roles Predefinidos" [toggleable]="true" [collapsed]="true" class="mt-3">
-              <div class="flex gap-2">
-                <button pButton label="Solo Lectura" icon="pi pi-eye" (click)="setReadOnlyPermissions()" class="p-button-outlined p-button-sm"></button>
-                <button pButton label="Colaborador" icon="pi pi-user" (click)="setCollaboratorPermissions()" class="p-button-outlined p-button-sm"></button>
-                <button pButton label="Moderador" icon="pi pi-users" (click)="setModeratorPermissions()" class="p-button-outlined p-button-sm"></button>
-                <button pButton label="Administrador" icon="pi pi-star" (click)="setAdminPermissions()" class="p-button-outlined p-button-sm"></button>
               </div>
             </p-fieldset>
           </div>
@@ -416,7 +378,8 @@ export class GroupConfigComponent implements OnInit {
   private userService = inject(UserService);
   private groupPermissionService = inject(GroupPermissionService);
   private alertService = inject(AlertService);
-  private loadingPromises: Map<number, Promise<User | null>> = new Map();
+  private usersCache: Map<number, User> = new Map();
+  private loadingUsers: Set<number> = new Set();
 
   @ViewChild('menu') menu: any;
   @ViewChild('dt') dt: any;
@@ -438,48 +401,63 @@ export class GroupConfigComponent implements OnInit {
   currentMenuItems: MenuItem[] = [];
   private currentMember: User | null = null;
 
-  roleOptions = [
-    { label: 'Administrador', value: 'admin' },
-    { label: 'Moderador', value: 'moderator' },
-    { label: 'Colaborador', value: 'collaborator' },
-    { label: 'Solo Lectura', value: 'viewer' }
-  ];
-
   ngOnInit() {
     this.loadMembers();
   }
 
   private async loadMembers() {
-    const group = this.groupService.getAll().find(g => g.id === this.groupId);
-    if (group) {
-      const membersList = await Promise.all(
-        group.members.map(memberId => this.getUserWithCache(memberId))
-      );
-      const validMembers = membersList.filter(user => user !== null) as User[];
-      this.members.set(validMembers);
+    try {
+      const group = await this.groupService.getById(this.groupId);
+      if (!group) {
+        console.error('Grupo no encontrado');
+        return;
+      }
 
-      for (const member of validMembers) {
-        const permissions = this.groupPermissionService.getUserGroupPermissions(member.id, this.groupId);
+      const membersList: User[] = [];
+      for (const memberId of group.members) {
+        const user = await this.getUserWithCache(memberId);
+        if (user) {
+          membersList.push(user);
+        }
+      }
+
+      this.members.set(membersList);
+
+      for (const member of membersList) {
+        const permissions = await this.groupPermissionService.getUserGroupPermissions(member.id, this.groupId);
         if (permissions) {
           this.memberPermissionsMap.set(member.id, permissions);
         }
       }
+    } catch (error) {
+      console.error('Error loading members:', error);
+      this.alertService.error('Error', 'No se pudieron cargar los miembros del grupo');
     }
   }
 
   private async getUserWithCache(userId: number): Promise<User | null> {
-    if (this.loadingPromises.has(userId)) {
-      return this.loadingPromises.get(userId)!;
+    if (this.usersCache.has(userId)) {
+      return this.usersCache.get(userId) || null;
     }
 
-    const promise = this.userService.getById(userId);
-    this.loadingPromises.set(userId, promise);
+    if (this.loadingUsers.has(userId)) {
+      let retries = 0;
+      while (this.loadingUsers.has(userId) && retries < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        retries++;
+      }
+      return this.usersCache.get(userId) || null;
+    }
 
+    this.loadingUsers.add(userId);
     try {
-      const user = await promise;
+      const user = await this.userService.getBasicUser(userId);
+      if (user) {
+        this.usersCache.set(userId, user);
+      }
       return user;
     } finally {
-      this.loadingPromises.delete(userId);
+      this.loadingUsers.delete(userId);
     }
   }
 
@@ -519,39 +497,18 @@ export class GroupConfigComponent implements OnInit {
       .slice(0, 2);
   }
 
-  getMemberRole(userId: number): string {
-    const permissions = this.memberPermissionsMap.get(userId);
-    if (!permissions) return 'Miembro';
-
-    if (permissions.manageGroupPrivileges && permissions.editGroupSettings) return 'Administrador';
-    if (permissions.addMember || permissions.editMemberRole) return 'Moderador';
-    if (permissions.createTicket || permissions.editTicket) return 'Colaborador';
-    return 'Solo Lectura';
-  }
-
-  getRoleClass(role: string): string {
-    const classes = {
-      'Administrador': 'bg-purple-600 text-white',
-      'Moderador': 'bg-blue-600 text-white',
-      'Colaborador': 'bg-green-600 text-white',
-      'Solo Lectura': 'bg-gray-500 text-white',
-      'Miembro': 'bg-gray-500 text-white'
-    };
-    return classes[role as keyof typeof classes] || 'bg-gray-500 text-white';
-  }
-
   isOwnerOrSelf(member: User): boolean {
     const isOwner = this.groupInfo?.authorId === member.id;
     const isCurrentUser = this.userService.currentUser()?.id === member.id;
     return isOwner || isCurrentUser;
   }
 
-  openMenu(event: any, member: User) {
+  async openMenu(event: any, member: User) {
     if (!this.isOwnerOrSelf(member)) {
       this.currentMember = member;
       this.currentMenuItems = [];
 
-      if (this.groupPermissionService.hasGroupPermission(this.groupId, 'editMemberRole')) {
+      if (await this.groupPermissionService.hasGroupPermission(this.groupId, 'manageGroupPrivileges')) {
         this.currentMenuItems.push({
           label: 'Editar Permisos',
           icon: 'pi pi-lock',
@@ -561,7 +518,7 @@ export class GroupConfigComponent implements OnInit {
         });
       }
 
-      if (this.groupPermissionService.hasGroupPermission(this.groupId, 'removeMember')) {
+      if (await this.groupPermissionService.hasGroupPermission(this.groupId, 'removeMember')) {
         if (this.currentMenuItems.length > 0) {
           this.currentMenuItems.push({ separator: true });
         }
@@ -632,156 +589,56 @@ export class GroupConfigComponent implements OnInit {
 
   async addMember() {
     if (!this.newMemberEmail) {
-      this.alertService.error(
-        'Error',
-        'Debe ingresar un email',
-      );
+      this.alertService.error('Error', 'Debe ingresar un email');
       return;
     }
-
     try {
-      const user = await this.userService.getByEmail(this.newMemberEmail);
-
+      const user = await this.userService.getByBasicEmail(this.newMemberEmail);
       if (!user) {
-        this.alertService.error(
-          'Error',
-          'Usuario no encontrado');
+        this.alertService.error('Error', 'Usuario no encontrado');
         return;
       }
-
       const success = await this.groupService.addMember(this.groupId, this.newMemberEmail);
 
       if (success) {
-        // 🔥 El usuario ya lo tenemos, no necesitamos cargarlo de nuevo
         let permissions: Partial<GroupPermissions> = {};
 
-        switch (this.newMemberRole) {
-          case 'admin':
-            permissions = {
-              createTicket: true,
-              editTicket: true,
-              deleteTicket: true,
-              addMember: true,
-              removeMember: true,
-              editMemberRole: true,
-              editGroupSettings: true,
-              manageGroupPrivileges: true
-            };
-            break;
-          case 'moderator':
-            permissions = {
-              createTicket: true,
-              editTicket: true,
-              addMember: true,
-              editMemberRole: true
-            };
-            break;
-          case 'collaborator':
-            permissions = {
-              createTicket: true,
-              editTicket: true
-            };
-            break;
-          default:
-            permissions = {};
-        }
-
         permissions.viewTicket = true;
-        permissions.viewMembers = true;
-
         await this.groupPermissionService.assignGroupPermissions(user.id, this.groupId, permissions);
 
+        this.usersCache.set(user.id, user);
         this.memberPermissionsMap.set(user.id, { ...this.getEmptyPermissions(), ...permissions });
 
         await this.loadMembers();
 
-        this.alertService.success(
-          'Éxito',
-          'Miembro añadido correctamente');
-
+        this.alertService.success('Éxito', 'Miembro añadido correctamente');
         this.closeAddMemberDialog();
       } else {
-        this.alertService.error('Error','No se pudo añadir el miembro');
+        this.alertService.error('Error', 'No se pudo añadir el miembro');
       }
     } catch (error) {
       console.error('Error adding member:', error);
-      this.alertService.error('Error','Ocurrió un error al añadir el miembro');
+      this.alertService.error('Error', 'Ocurrió un error al añadir el miembro');
     }
   }
 
-  removeMember(member: User) {
-    const success = this.groupService.removeMember(this.groupId, member.id);
+  async removeMember(member: User) {
+    try {
+      const success = await this.groupService.removeMember(this.groupId, member.id);
 
-    if (success) {
-      this.groupPermissionService.removeUserGroupPermissions(member.id, this.groupId);
-      this.memberPermissionsMap.delete(member.id);
-      this.loadMembers();
+      if (success) {
+        this.groupPermissionService.removeUserGroupPermissions(member.id, this.groupId);
+        this.memberPermissionsMap.delete(member.id);
+        this.usersCache.delete(member.id);
+        await this.loadMembers();
 
-      this.alertService.info('Miembro expulsado', `${member.fullName} ha sido expulsado del grupo`);
+        this.alertService.info('Miembro expulsado', `${member.fullName} ha sido expulsado del grupo`);
+      } else {
+        this.alertService.error('Error', 'No se pudo expulsar al miembro');
+      }
+    } catch (error) {
+      console.error('Error removing member:', error);
+      this.alertService.error('Error', 'Ocurrió un error al expulsar al miembro');
     }
-  }
-
-  setAdminPermissions() {
-    this.memberPermissions = {
-      createTicket: true,
-      editTicket: true,
-      deleteTicket: true,
-      viewTicket: true,
-      addMember: true,
-      removeMember: true,
-      editMemberRole: true,
-      viewMembers: true,
-      editGroupSettings: true,
-      deleteGroup: true,
-      manageGroupPrivileges: true
-    };
-  }
-
-  setModeratorPermissions() {
-    this.memberPermissions = {
-      createTicket: true,
-      editTicket: true,
-      deleteTicket: false,
-      viewTicket: true,
-      addMember: true,
-      removeMember: true,
-      editMemberRole: true,
-      viewMembers: true,
-      editGroupSettings: false,
-      deleteGroup: false,
-      manageGroupPrivileges: false
-    };
-  }
-
-  setCollaboratorPermissions() {
-    this.memberPermissions = {
-      createTicket: true,
-      editTicket: true,
-      deleteTicket: false,
-      viewTicket: true,
-      addMember: false,
-      removeMember: false,
-      editMemberRole: false,
-      viewMembers: true,
-      editGroupSettings: false,
-      deleteGroup: false,
-      manageGroupPrivileges: false
-    };
-  }
-
-  setReadOnlyPermissions() {
-    this.memberPermissions = {
-      createTicket: false,
-      editTicket: false,
-      deleteTicket: false,
-      viewTicket: true,
-      addMember: false,
-      removeMember: false,
-      editMemberRole: false,
-      viewMembers: true,
-      editGroupSettings: false,
-      deleteGroup: false,
-      manageGroupPrivileges: false
-    };
   }
 }

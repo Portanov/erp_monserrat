@@ -58,17 +58,22 @@ export class HasGroupPermissionDirective {
     });
   }
 
-  private updateView(): void {
+  private async updateView(): Promise<void> {
     let hasPermission = false;
 
-    if (this.permission) {
-      hasPermission = this.groupPermissionService.hasGroupPermission(this.groupId, this.permission);
-    } else if (this.permissions.length > 0) {
-      if (this.mode === 'all') {
-        hasPermission = this.groupPermissionService.hasAllGroupPermissions(this.groupId, this.permissions);
-      } else {
-        hasPermission = this.groupPermissionService.hasAnyGroupPermission(this.groupId, this.permissions);
+    try {
+      if (this.permission) {
+        hasPermission = await this.groupPermissionService.hasGroupPermission(this.groupId, this.permission);
+      } else if (this.permissions.length > 0) {
+        if (this.mode === 'all') {
+          hasPermission = await this.groupPermissionService.hasAllGroupPermissions(this.groupId, this.permissions);
+        } else {
+          hasPermission = await this.groupPermissionService.hasAnyGroupPermission(this.groupId, this.permissions);
+        }
       }
+    } catch (error) {
+      console.error('Error checking permission:', error);
+      hasPermission = false;
     }
 
     if (hasPermission) {
