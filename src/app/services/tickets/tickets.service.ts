@@ -171,7 +171,7 @@ export class TicketsService extends GatewayBaseService {
    * Agregar comentario a un ticket
    */
   addComment(ticketId: number, content: string, userId: number): Observable<Comment> {
-    return this.post<Comment>(`/tickets/${ticketId}/comments`, { content });
+    return this.post<Comment>(`/tickets/${ticketId}/comments`, { content, userId });
   }
 
   /**

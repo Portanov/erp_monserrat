@@ -245,7 +245,7 @@ export class User implements OnInit {
     if (userToDelete) {
       const success = await this.userService.deleteUser(username);
       if (success) {
-        await this.permissionService.removeUser(userToDelete.id);
+        await this.permissionService.removeUserPermissions(userToDelete.id);
         await this.loadUsers();
         this.alertService.success('Éxito', 'Usuario eliminado correctamente');
       } else {
@@ -258,7 +258,7 @@ export class User implements OnInit {
     if (this.isEditing && this.editingUserId) {
       const updatedUser = await this.userService.update(this.editingUserId, {
         id: this.editingUserId,
-        username: this.newUser.username,  
+        username: this.newUser.username,
         fullName: this.newUser.fullName,
         email: this.newUser.email,
         phone: this.newUser.phone,
@@ -269,8 +269,15 @@ export class User implements OnInit {
 
       if (updatedUser) {
         // Guardar todos los permisos
-        for (const [page, permissions] of Object.entries(this.userPermissions)) {
-          await this.permissionService.assignPermissions(this.editingUserId, page, permissions);
+        for (const [page, pagePermissions] of Object.entries(this.userPermissions)) {
+          for (const [action, isActive] of Object.entries(pagePermissions)) {
+            await this.permissionService.assignPermission(
+              this.editingUserId,
+              page,
+              action,
+              isActive || false
+            );
+          }
         }
         await this.loadUsers();
         this.createdVisible = false;
@@ -292,8 +299,21 @@ export class User implements OnInit {
       if (success) {
         const newUser = await this.userService.getByUsername(this.newUser.username);
         if (newUser) {
-          for (const [page, permissions] of Object.entries(this.userPermissions)) {
-            await this.permissionService.assignPermissions(newUser.id, page, permissions);
+          // Initialize user permissions in backend
+          await this.permissionService.initializeUserPermissions(newUser.id);
+
+          // Assign selected permissions
+          for (const [page, pagePermissions] of Object.entries(this.userPermissions)) {
+            for (const [action, isActive] of Object.entries(pagePermissions)) {
+              if (isActive) {
+                await this.permissionService.assignPermission(
+                  newUser.id,
+                  page,
+                  action,
+                  true
+                );
+              }
+            }
           }
         }
         await this.loadUsers();

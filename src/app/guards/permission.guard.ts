@@ -3,7 +3,7 @@ import { CanActivateFn, Router, ActivatedRouteSnapshot, RouterStateSnapshot } fr
 import { PermissionService } from '../services/permissions/permissions.service';
 import { UserService } from '../services/user/user.service';
 
-export const permissionGuard: CanActivateFn = (
+export const permissionGuard: CanActivateFn = async (
   route: ActivatedRouteSnapshot,
   state: RouterStateSnapshot
 ) => {
@@ -17,6 +17,8 @@ export const permissionGuard: CanActivateFn = (
     router.navigate(['/login']);
     return false;
   }
+
+  await permissionService.loadCurrentUserPermissions();
 
   const requiredPermissions = route.data['permissions'] as string[];
 
